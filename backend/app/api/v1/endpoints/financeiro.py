@@ -27,7 +27,7 @@ from app.core.auth import get_session, get_current_tenant_id, get_current_user_i
 
 router = APIRouter()
 
-@router.get("/", response_model=List[LancamentoFinanceiro])
+@router.get("/")
 def list_lancamentos(
     natureza: Optional[NaturezaFinanceira] = None,
     status_filtro: Optional[StatusLancamento] = None,
@@ -35,19 +35,34 @@ def list_lancamentos(
     session: Session = Depends(get_session)
 ):
     """
-    Lista os lançamentos financeiros da empresa ativa.
+    Lista os lançamentos financeiros da empresa ativa, com dados do parceiro.
     """
-    stmt = select(LancamentoFinanceiro).where(LancamentoFinanceiro.empresa_id == tenant_id)
-    
+    from app.models.database import Parceiro
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(LancamentoFinanceiro)
+        .where(LancamentoFinanceiro.empresa_id == tenant_id)
+        .options(selectinload(LancamentoFinanceiro.parceiro))
+    )
+
     if natureza:
         stmt = stmt.where(LancamentoFinanceiro.natureza == natureza)
     if status_filtro:
         stmt = stmt.where(LancamentoFinanceiro.status == status_filtro)
-        
-    # Ordenar por data de vencimento
+
     stmt = stmt.order_by(LancamentoFinanceiro.data_vencimento.asc())
-    
-    return session.exec(stmt).all()
+    lancamentos = session.exec(stmt).all()
+
+    result = []
+    for l in lancamentos:
+        d = l.model_dump(mode='json')
+        if l.parceiro:
+            d['parceiro'] = {'id': str(l.parceiro.id), 'nome_razao': l.parceiro.nome_razao}
+        else:
+            d['parceiro'] = None
+        result.append(d)
+    return result
 
 @router.post("/", response_model=LancamentoFinanceiro, status_code=status.HTTP_201_CREATED)
 def create_lancamento(
@@ -89,16 +104,28 @@ def create_lancamento(
     
     return lancamento
 
+class LiquidacaoPayload(BaseModel):
+    valor_pago: Decimal
+    data_pagamento: date
+    conta_bancaria_id: UUID
+    juros_multa: Optional[Decimal] = Decimal('0')
+    desconto: Optional[Decimal] = Decimal('0')
+
+from pydantic import BaseModel as _BaseModel
+
 @router.post("/{lancamento_id}/liquidar")
 def liquidar_lancamento(
     lancamento_id: UUID,
-    valor_pago: Decimal,
-    data_pagamento: date,
-    conta_bancaria_id: UUID,
+    payload: LiquidacaoPayload,
     tenant_id: UUID = Depends(get_current_tenant_id),
     user_id: UUID = Depends(get_current_user_id),
     session: Session = Depends(get_session)
 ):
+    valor_pago = payload.valor_pago
+    data_pagamento = payload.data_pagamento
+    conta_bancaria_id = payload.conta_bancaria_id
+    juros_multa = payload.juros_multa or Decimal('0')
+    desconto = payload.desconto or Decimal('0')
     """
     Realiza a baixa (liquidação) de um título financeiro com validação de SoD.
     """
@@ -130,15 +157,20 @@ def liquidar_lancamento(
     if not conta or conta.empresa_id != tenant_id:
         raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
     
+    # Valor líquido considerando juros/multa e desconto
+    valor_liquido = valor_pago + juros_multa - desconto
+
     if lancamento.natureza == NaturezaFinanceira.RECEBER:
-        conta.saldo_atual += valor_pago
+        conta.saldo_atual += valor_liquido
     else:
-        conta.saldo_atual -= valor_pago
-    
+        conta.saldo_atual -= valor_liquido
+
     # Atualizar status do lançamento
     lancamento.status = StatusLancamento.PAGO
     lancamento.data_pagamento = data_pagamento
     lancamento.valor_pago = valor_pago
+    lancamento.juros_multa = juros_multa
+    lancamento.desconto = desconto
     lancamento.conta_bancaria_id = conta_bancaria_id
     lancamento.usuario_liquidacao_id = user_id
 

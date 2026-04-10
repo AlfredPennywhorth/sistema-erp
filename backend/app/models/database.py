@@ -343,6 +343,8 @@ class ParceiroContato(FullAuditMixin, table=True):
 class LancamentoFinanceiro(FullAuditMixin, table=True):
     __tablename__ = "lancamentos_financeiros"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+
+    parceiro: Optional["Parceiro"] = Relationship()
     
     # Classificação
     tipo: TipoLancamento = Field(default=TipoLancamento.PROVISAO)

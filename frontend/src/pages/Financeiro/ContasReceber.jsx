@@ -149,7 +149,7 @@ const ContasReceber = () => {
                         <span className="font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-500 transition-colors">{l.descricao}</span>
                         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400 uppercase font-black tracking-wide">
                           <User size={10} className="text-slate-500" />
-                          {l.parceiro?.nome || 'Cliente avulso'}
+                          {l.parceiro?.nome_razao || 'Cliente avulso'}
                         </div>
                       </div>
                     </td>

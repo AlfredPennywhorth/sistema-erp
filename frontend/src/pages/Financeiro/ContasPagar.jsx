@@ -146,7 +146,7 @@ const ContasPagar = () => {
                     <td className="px-8 py-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-700 dark:text-slate-200 group-hover:text-brand-primary transition-colors">{l.descricao}</span>
-                        <span className="text-[10px] text-slate-400 uppercase font-bold">{l.parceiro?.nome || 'Fornecedor avulso'}</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">{l.parceiro?.nome_razao || 'Fornecedor avulso'}</span>
                       </div>
                     </td>
                     <td className="px-8 py-4">

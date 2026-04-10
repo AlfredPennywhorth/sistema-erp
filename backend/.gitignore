@@ -1,0 +1,29 @@
+# Variáveis de ambiente (NUNCA enviar ao repositório)
+.env
+.env.*
+!.env.example
+
+# Banco de dados local
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+*.txt
+
+# Arquivos de debug e scripts temporários
+debug_*.py
+check_*.py
+cleanup_*.py
+auto_fix_*.py
+apply_*.py

@@ -1,0 +1,38 @@
+# Variáveis de ambiente (NUNCA enviar ao repositório)
+.env
+.env.*
+!.env.example
+
+# Dependências
+node_modules/
+
+# Banco de dados local
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Build
+dist/
+build/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+
+# Arquivos temporários e de debug
+tmp/
+*.tmp
+
+# Editor
+.vscode/
+.idea/
+.DS_Store

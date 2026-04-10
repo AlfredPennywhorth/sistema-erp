@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlmodel import Session, select, func
+from pydantic import BaseModel
 from uuid import UUID
 from datetime import date, datetime
 from typing import List, Optional
@@ -110,8 +111,6 @@ class LiquidacaoPayload(BaseModel):
     conta_bancaria_id: UUID
     juros_multa: Optional[Decimal] = Decimal('0')
     desconto: Optional[Decimal] = Decimal('0')
-
-from pydantic import BaseModel as _BaseModel
 
 @router.post("/{lancamento_id}/liquidar")
 def liquidar_lancamento(

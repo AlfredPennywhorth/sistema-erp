@@ -1,0 +1,14 @@
+1. Adicionando valores faltantes ao enum 'userrole'...
+   + 'OPERADOR' adicionado (ou já existia)
+   + 'CONTADOR' adicionado (ou já existia)
+
+2. Convertendo OPERATOR -> OPERADOR nos dados existentes...
+   convites atualizados: 2 linhas
+   usuario_empresas atualizados: 0 linhas
+
+3. Verificação final:
+   convites roles: ['OPERADOR', 'ADMIN']
+   usuario_empresas roles: ['ADMIN']
+   enum values: ['OWNER', 'PARTNER', 'ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER', 'AUDITOR_CONTADOR', 'OPERADOR', 'CONTADOR']
+
+SUCESSO!

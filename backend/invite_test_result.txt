@@ -1,0 +1,9 @@
+﻿=== CONVITES NO BANCO ===
+Token: e78c2b8b-a581-4e... | Email: andre.w.souza@outlook.com | Role: OPERADOR | Status: PENDING
+Token: 0dffea14-7b58-42... | Email: aws311274@gmail.com | Role: OPERADOR | Status: PENDING
+Token: 9b418445-ad36-47... | Email: aws311274@gmail.com | Role: ADMIN | Status: PENDING
+Token: 3af5c99f-9806-44... | Email: aws311274@gmail.com | Role: ADMIN | Status: ACCEPTED
+Token: 20d9a784-aca7-48... | Email: aws311274@gmail.com | Role: ADMIN | Status: ACCEPTED
+
+Testando endpoint com token: e78c2b8b-a581-4e...
+SUCESSO: {'email': 'andre.w.souza@outlook.com', 'role': 'OPERADOR', 'company_id': '5510f802-768f-4d34-95f0-35c167b44964', 'company_name': 'COMPANHIA DE ENGENHARIA DE TRAFEGO'}

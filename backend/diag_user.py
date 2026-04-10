@@ -1,0 +1,10 @@
+import sqlite3
+conn = sqlite3.connect('erp.db')
+c = conn.cursor()
+print("--- USUARIO aws311274@gmail.com ---")
+c.execute("SELECT id, email, nome FROM usuarios WHERE email = 'aws311274@gmail.com'")
+print(c.fetchone())
+print("\n--- VINCULOS DO USUARIO ---")
+c.execute("SELECT * FROM usuario_empresas")
+print(c.fetchall())
+conn.close()

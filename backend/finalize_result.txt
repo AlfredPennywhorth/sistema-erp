@@ -1,0 +1,5 @@
+﻿=== Passo 1: Detalhes do Convite ===
+OK: {'email': 'andre.w.souza@outlook.com', 'role': 'OPERADOR', 'company_id': '5510f802-768f-4d34-95f0-35c167b44964', 'company_name': 'COMPANHIA DE ENGENHARIA DE TRAFEGO'}
+
+=== Passo 2: Finalizar Registro (Mock UUID: c4394a44...) ===
+SUCESSO: {'message': 'Cadastro finalizado com sucesso! Agora vocÛ pode fazer login.'}

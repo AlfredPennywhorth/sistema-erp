@@ -1,0 +1,18 @@
+﻿Email: andre.w.souza@outlook.com
+Role: OPERADOR
+Status: PENDING
+Expira em: 2026-04-08 21:38:53.145701
+Link: http://localhost:5173/finalizar-registro?token=e78c2b8b-a581-4e15-81a2-34742e0ebaef
+---
+Email: aws311274@gmail.com
+Role: OPERADOR
+Status: PENDING
+Expira em: 2026-04-08 06:49:32.859475
+Link: http://localhost:5173/finalizar-registro?token=0dffea14-7b58-4291-931f-9ad88be7d59d
+---
+Email: aws311274@gmail.com
+Role: ADMIN
+Status: PENDING
+Expira em: 2026-04-07 21:26:55.265182
+Link: http://localhost:5173/finalizar-registro?token=9b418445-ad36-4733-b91d-744d34bcf21c
+---

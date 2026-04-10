@@ -1,0 +1,16 @@
+=== TIPO DA COLUNA ROLE ===
+('role', 'USER-DEFINED', 'userrole')
+('role', 'USER-DEFINED', 'userrole')
+=== ROLES em convites ===
+('ADMIN',)
+('OPERATOR',)
+=== ROLES em usuario_empresas ===
+('ADMIN',)
+=== ENUM TYPES ===
+('userrole', 'OWNER')
+('userrole', 'PARTNER')
+('userrole', 'ADMIN')
+('userrole', 'MANAGER')
+('userrole', 'OPERATOR')
+('userrole', 'VIEWER')
+('userrole', 'AUDITOR_CONTADOR')

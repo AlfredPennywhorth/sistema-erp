@@ -1,11 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { X, Zap, DollarSign, Calendar, Tag, User, Layers, Building2, Plus, Loader2, Check } from 'lucide-react';
+import { X, Zap, DollarSign, Calendar, Tag, User, Layers, Building2, Plus, Loader2, Check, Search, Phone, Mail } from 'lucide-react';
 import { api } from '../../lib/api';
-import { ParceirosAPI } from '../../lib/api/parceiros';
 
 const NovoParceirInline = ({ onSalvo, onCancelar }) => {
   const [loading, setLoading] = useState(false);
-  const [dados, setDados] = useState({ nome_razao: '', cpf_cnpj: '', tipo_pessoa: 'PJ', is_cliente: true, is_fornecedor: false });
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [dados, setDados] = useState({
+    nome_razao: '',
+    nome_fantasia: '',
+    cpf_cnpj: '',
+    tipo_pessoa: 'PJ',
+    is_cliente: true,
+    is_fornecedor: false,
+    telefone: '',
+    email: '',
+    logradouro: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+    cep: '',
+  });
 
   const maskCNPJ = (v) => {
     v = v.replace(/\D/g, '');
@@ -26,6 +41,36 @@ const NovoParceirInline = ({ onSalvo, onCancelar }) => {
     return v;
   };
 
+  const handleCnpjChange = async (val) => {
+    const masked = maskCNPJ(val);
+    setDados(prev => ({ ...prev, cpf_cnpj: masked }));
+
+    const clean = masked.replace(/\D/g, '');
+    if (clean.length === 14) {
+      setCnpjLoading(true);
+      try {
+        const res = await api.get(`/parceiros/cnpj/${clean}`);
+        const info = res.data;
+        setDados(prev => ({
+          ...prev,
+          cpf_cnpj: masked,
+          nome_razao: info.razao_social || info.nome || prev.nome_razao,
+          nome_fantasia: info.nome_fantasia || prev.nome_fantasia,
+          logradouro: info.logradouro || prev.logradouro,
+          numero: info.numero || prev.numero,
+          bairro: info.bairro || prev.bairro,
+          cidade: info.municipio || prev.cidade,
+          uf: info.uf || prev.uf,
+          cep: (info.cep || prev.cep).replace(/\D/g, ''),
+        }));
+      } catch (err) {
+        console.warn('CNPJ não encontrado na BrasilAPI:', err.message);
+      } finally {
+        setCnpjLoading(false);
+      }
+    }
+  };
+
   const handleSalvar = async () => {
     if (!dados.nome_razao.trim() || !dados.cpf_cnpj.trim()) {
       alert('Preencha o nome e o CPF/CNPJ.');
@@ -33,8 +78,8 @@ const NovoParceirInline = ({ onSalvo, onCancelar }) => {
     }
     setLoading(true);
     try {
-      const res = await ParceirosAPI.create({ ...dados, cpf_cnpj: dados.cpf_cnpj.replace(/\D/g, '') });
-      onSalvo(res);
+      const res = await api.post('/parceiros/', { ...dados, cpf_cnpj: dados.cpf_cnpj.replace(/\D/g, '') });
+      onSalvo(res.data);
     } catch (err) {
       alert('Erro ao criar parceiro: ' + (err.response?.data?.detail || err.message));
     } finally {
@@ -46,72 +91,99 @@ const NovoParceirInline = ({ onSalvo, onCancelar }) => {
     <div className="mt-2 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-300">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cadastro Rápido de Parceiro</p>
 
+      {/* Tipo PJ/PF */}
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setDados({ ...dados, tipo_pessoa: 'PJ' })}
+        <button type="button" onClick={() => setDados(prev => ({ ...prev, tipo_pessoa: 'PJ' }))}
           className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
-            dados.tipo_pessoa === 'PJ'
-              ? 'bg-brand-primary text-white'
-              : 'bg-slate-200 dark:bg-white/10 text-slate-500'
-          }`}
-        >
-          PJ
+            dados.tipo_pessoa === 'PJ' ? 'bg-brand-primary text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-500'
+          }`}>
+          Pessoa Jurídica
         </button>
-        <button
-          type="button"
-          onClick={() => setDados({ ...dados, tipo_pessoa: 'PF' })}
+        <button type="button" onClick={() => setDados(prev => ({ ...prev, tipo_pessoa: 'PF' }))}
           className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
-            dados.tipo_pessoa === 'PF'
-              ? 'bg-brand-primary text-white'
-              : 'bg-slate-200 dark:bg-white/10 text-slate-500'
-          }`}
-        >
-          PF
+            dados.tipo_pessoa === 'PF' ? 'bg-brand-primary text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-500'
+          }`}>
+          Pessoa Física
         </button>
       </div>
 
+      {/* CNPJ/CPF com busca automática */}
+      <div className="relative">
+        <input
+          placeholder={dados.tipo_pessoa === 'PJ' ? 'CNPJ (busca automática) *' : 'CPF *'}
+          className="w-full h-10 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 pr-10 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-brand-primary"
+          value={dados.cpf_cnpj}
+          onChange={(e) => {
+            if (dados.tipo_pessoa === 'PJ') {
+              handleCnpjChange(e.target.value);
+            } else {
+              setDados(prev => ({ ...prev, cpf_cnpj: maskCPF(e.target.value) }));
+            }
+          }}
+        />
+        <div className="absolute right-3 top-2.5 text-slate-400">
+          {cnpjLoading ? <Loader2 size={16} className="animate-spin text-brand-primary" /> : <Search size={16} />}
+        </div>
+      </div>
+
+      {/* Razão Social - preenchida automaticamente */}
       <input
         placeholder={dados.tipo_pessoa === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}
         className="w-full h-10 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-brand-primary"
         value={dados.nome_razao}
-        onChange={(e) => setDados({ ...dados, nome_razao: e.target.value })}
-      />
-      <input
-        placeholder={dados.tipo_pessoa === 'PJ' ? 'CNPJ *' : 'CPF *'}
-        className="w-full h-10 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-brand-primary"
-        value={dados.cpf_cnpj}
-        onChange={(e) => {
-          const val = e.target.value;
-          setDados({ ...dados, cpf_cnpj: dados.tipo_pessoa === 'PJ' ? maskCNPJ(val) : maskCPF(val) });
-        }}
+        onChange={(e) => setDados(prev => ({ ...prev, nome_razao: e.target.value }))}
       />
 
+      {/* Telefone e Email - preenchimento manual */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="relative">
+          <Phone size={13} className="absolute left-3 top-3 text-slate-400" />
+          <input
+            placeholder="Telefone"
+            className="w-full h-10 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-8 pr-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-brand-primary"
+            value={dados.telefone}
+            onChange={(e) => setDados(prev => ({ ...prev, telefone: e.target.value }))}
+          />
+        </div>
+        <div className="relative">
+          <Mail size={13} className="absolute left-3 top-3 text-slate-400" />
+          <input
+            placeholder="E-mail"
+            type="email"
+            className="w-full h-10 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-8 pr-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-brand-primary"
+            value={dados.email}
+            onChange={(e) => setDados(prev => ({ ...prev, email: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      {/* Endereço preenchido automaticamente (somente leitura visual) */}
+      {dados.logradouro && (
+        <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+          ✅ Endereço preenchido: {dados.logradouro}, {dados.numero} - {dados.bairro}, {dados.cidade}/{dados.uf}
+        </div>
+      )}
+
+      {/* Cliente / Fornecedor */}
       <div className="flex gap-4">
         <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-600 dark:text-slate-300">
-          <input type="checkbox" checked={dados.is_cliente} onChange={(e) => setDados({ ...dados, is_cliente: e.target.checked })} />
+          <input type="checkbox" checked={dados.is_cliente} onChange={(e) => setDados(prev => ({ ...prev, is_cliente: e.target.checked }))} />
           Cliente
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-600 dark:text-slate-300">
-          <input type="checkbox" checked={dados.is_fornecedor} onChange={(e) => setDados({ ...dados, is_fornecedor: e.target.checked })} />
+          <input type="checkbox" checked={dados.is_fornecedor} onChange={(e) => setDados(prev => ({ ...prev, is_fornecedor: e.target.checked }))} />
           Fornecedor
         </label>
       </div>
 
+      {/* Botões */}
       <div className="flex gap-2 pt-1">
-        <button
-          type="button"
-          onClick={onCancelar}
-          className="px-4 h-9 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10 transition-all"
-        >
+        <button type="button" onClick={onCancelar}
+          className="px-4 h-9 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
           Cancelar
         </button>
-        <button
-          type="button"
-          onClick={handleSalvar}
-          disabled={loading}
-          className="flex-1 h-9 bg-brand-primary text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="button" onClick={handleSalvar} disabled={loading || cnpjLoading}
+          className="flex-1 h-9 bg-brand-primary text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50">
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           Salvar Parceiro
         </button>

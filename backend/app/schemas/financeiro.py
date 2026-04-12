@@ -3,7 +3,8 @@ from typing import Optional, List
 from uuid import UUID
 from enum import Enum
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
+from app.models.database import NaturezaFinanceira, TipoLancamento, StatusLancamento, TipoEventoContabil
 
 # Enums (replicados dos models para typing ou importados)
 class NaturezaConta(str, Enum):
@@ -122,5 +123,64 @@ class FormaPagamentoCreate(FormaPagamentoBase):
 class FormaPagamentoRead(FormaPagamentoBase):
     id: UUID
     empresa_id: UUID
+    class Config:
+        from_attributes = True
+# --- Extrato ---
+class ExtratoRead(BaseModel):
+    id: UUID
+    descricao: str
+    natureza: NaturezaFinanceira
+    valor_pago: Optional[Decimal] = Decimal('0')
+    data_pagamento: Optional[date] = None
+    conta_nome: Optional[str] = None
+    categoria_nome: Optional[str] = None
+    parceiro_nome: Optional[str] = None
+    documento: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class ExtratoPaginatedRead(BaseModel):
+    items: List[ExtratoRead]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+class LancamentoUpdate(BaseModel):
+    descricao: Optional[str] = None
+    plano_contas_id: Optional[UUID] = None
+    conta_bancaria_id: Optional[UUID] = None
+    data_pagamento: Optional[date] = None
+    valor_pago: Optional[Decimal] = None
+    documento: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class LancamentoCreate(BaseModel):
+    descricao: str = Field(..., max_length=255)
+    valor_previsto: Decimal = Field(default=0)
+    data_vencimento: date
+    natureza: NaturezaFinanceira
+    tipo: TipoLancamento = TipoLancamento.PROVISAO
+    
+    # Campo novo para automação
+    tipo_evento: Optional[TipoEventoContabil] = None
+    
+    # Campos originais (fallback)
+    plano_contas_id: Optional[UUID] = None
+    parceiro_id: Optional[UUID] = None
+    centro_custo_id: Optional[UUID] = None
+    conta_bancaria_id: Optional[UUID] = None
+    forma_pagamento_id: Optional[UUID] = None
+    
+    # Outros campos
+    documento: Optional[str] = None
+    observacoes: Optional[str] = None
+    data_competencia: Optional[date] = None
+    data_pagamento: Optional[date] = None
+    valor_pago: Optional[Decimal] = Decimal('0')
+
     class Config:
         from_attributes = True

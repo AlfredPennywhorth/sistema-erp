@@ -14,6 +14,7 @@ import ContasPagar from './pages/Financeiro/ContasPagar';
 import ContasReceber from './pages/Financeiro/ContasReceber';
 import Tesouraria from './pages/Financeiro/Tesouraria';
 import PlanoContas from './pages/Financeiro/PlanoContas';
+import RegrasContabeis from './pages/Financeiro/RegrasContabeis';
 import Sidebar from './components/Layout/Sidebar';
 import QuickLaunchModal from './components/Financeiro/QuickLaunchModal';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -23,7 +24,7 @@ import { Landmark, Users, LayoutDashboard, Database, LogOut, TrendingDown, Trend
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, isAuthenticated, activeTenant, loading } = useAuth();
+  const { logout, isAuthenticated, activeTenant, loading, user } = useAuth();
   const [isQuickLaunchOpen, setIsQuickLaunchOpen] = useState(false);
   const [quickLaunchNatureza, setQuickLaunchNatureza] = useState('PAGAR');
   // ✅ FASE 3: Banner de servidor offline
@@ -139,6 +140,18 @@ function AppContent() {
                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                 <span className="text-[10px] font-black text-emerald-500 uppercase tracking-wider">Status: Online</span>
               </div>
+              <div className="flex items-center gap-3 px-3 py-2 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
+                <div className="w-8 h-8 bg-brand-primary/10 rounded-lg flex items-center justify-center text-brand-primary">
+                  <Users size={16} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-brand-primary uppercase tracking-tighter leading-none mb-0.5">Usuário Ativo</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">
+                    {user?.user_metadata?.full_name || user?.email || 'Usuário'}
+                  </span>
+                </div>
+              </div>
+
               <button
                 onClick={handleLogout}
                 className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors text-slate-400"
@@ -254,6 +267,11 @@ function AppContent() {
             <Route path="/financeiro/plano-contas" element={
               <ProtectedRoute>
                 <PlanoContas />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro/regras-contabeis" element={
+              <ProtectedRoute>
+                <RegrasContabeis />
               </ProtectedRoute>
             } />
 

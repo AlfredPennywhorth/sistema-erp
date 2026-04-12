@@ -1,7 +1,7 @@
 # from __future__ import annotations
 from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship, Column, JSON, create_engine, Session, select
-from sqlalchemy import Numeric, ForeignKey
+from sqlalchemy import Numeric, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.pool import NullPool
 from uuid import UUID, uuid4
@@ -120,6 +120,18 @@ class NaturezaFinanceira(str, Enum):
     PAGAR = "PAGAR"
     RECEBER = "RECEBER"
 
+class TipoEventoContabil(str, Enum):
+    COMPRA_PRAZO = "COMPRA_PRAZO"
+    COMPRA_AVISTA = "COMPRA_AVISTA"
+    VENDA_PRAZO = "VENDA_PRAZO"
+    VENDA_AVISTA = "VENDA_AVISTA"
+    SERVICO_PRESTADO_PRAZO = "SERVICO_PRESTADO_PRAZO"
+    SERVICO_PRESTADO_AVISTA = "SERVICO_PRESTADO_AVISTA"
+    DESPESA_CONSUMO = "DESPESA_CONSUMO"
+    ADIANTAMENTO_CLIENTE = "ADIANTAMENTO_CLIENTE"
+    ADIANTAMENTO_FORNECEDOR = "ADIANTAMENTO_FORNECEDOR"
+    TRANSFERENCIA_INTERNA = "TRANSFERENCIA_INTERNA"
+
 class StatusLancamento(str, Enum):
     ABERTO = "ABERTO"
     PAGO = "PAGO"
@@ -236,6 +248,21 @@ class JournalEntry(AuditMixin, table=True):
     modulo_origem: str = Field(default="FINANCEIRO", max_length=50)
     usuario_id: Optional[UUID] = Field(default=None)
 
+class RegraContabil(FullAuditMixin, table=True):
+    __tablename__ = "regras_contabeis"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "tipo_evento", "natureza", name="uq_regra_evento_natureza"),
+    )
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
+    tipo_evento: TipoEventoContabil = Field(nullable=False)
+    natureza: NaturezaFinanceira = Field(nullable=False)
+    conta_debito_id: UUID = Field(foreign_key="plano_contas.id", nullable=False)
+    conta_credito_id: UUID = Field(foreign_key="plano_contas.id", nullable=False)
+    historico_padrao: Optional[str] = Field(default=None)
+    ativo: bool = Field(default=True)
+
 class LogAuditoria(AuditMixin, table=True):
     __tablename__ = "logs_auditoria"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
@@ -348,8 +375,12 @@ class LancamentoFinanceiro(FullAuditMixin, table=True):
     
     # Classificação
     tipo: TipoLancamento = Field(default=TipoLancamento.PROVISAO)
-    natureza: NaturezaFinanceira
-    status: StatusLancamento = Field(default=StatusLancamento.ABERTO)
+    natureza: NaturezaFinanceira = Field(index=True)
+    status: StatusLancamento = Field(default=StatusLancamento.ABERTO, index=True)
+    
+    __table_args__ = (
+        Index("ix_lancamento_performance", "empresa_id", "status", "natureza"),
+    )
     
     # Vínculos
     parceiro_id: Optional[UUID] = Field(default=None, foreign_key="parceiros.id", index=True)

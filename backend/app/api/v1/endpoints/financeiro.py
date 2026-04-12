@@ -7,26 +7,144 @@ from typing import List, Optional
 from decimal import Decimal
 
 from app.models.database import (
-    LancamentoFinanceiro, 
-    Empresa, 
-    LogAuditoria, 
-    StatusLancamento, 
+    Parceiro,
+    RegraContabil,
+    LancamentoFinanceiro,
+    StatusLancamento,
     NaturezaFinanceira,
     TipoLancamento,
+    LogAuditoria,
+    Empresa,
     ContaBancaria,
     Banco,
     PlanoConta,
     CentroCusto,
-    FormaPagamento
+    FormaPagamento,
+    TipoEventoContabil,
+    TipoCentroCusto
 )
 from app.schemas.financeiro import (
-    PlanoContaCreate, PlanoContaRead, PlanoContaUpdate,
-    CentroCustoCreate, CentroCustoRead, CentroCustoUpdate,
-    FormaPagamentoCreate, FormaPagamentoRead
+    ExtratoRead, 
+    ExtratoPaginatedRead, 
+    LancamentoUpdate,
+    LancamentoCreate,
+    PlanoContaRead,
+    PlanoContaCreate,
+    PlanoContaUpdate,
+    CentroCustoRead,
+    CentroCustoCreate,
+    CentroCustoUpdate,
+    FormaPagamentoRead,
+    FormaPagamentoCreate
 )
 from app.core.auth import get_session, get_current_tenant_id, get_current_user_id
 
 router = APIRouter()
+
+# --- Manutenção de Lançamentos ---
+
+@router.patch("/manutencao/{lancamento_id}", response_model=LancamentoFinanceiro)
+def update_lancamento(
+    lancamento_id: str,
+    dados: LancamentoUpdate,
+    session: Session = Depends(get_session),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Atualiza dados de um lançamento existente.
+    """
+    try:
+        id_val = UUID(lancamento_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID de lançamento inválido")
+
+    lancamento = session.get(LancamentoFinanceiro, id_val)
+    if not lancamento or lancamento.empresa_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+    # Guardar estado para auditoria
+    dados_anteriores = lancamento.model_dump(mode='json')
+
+    update_data = dados.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(lancamento, key, value)
+
+    session.add(lancamento)
+    
+    # Log Auditoria
+    log = LogAuditoria(
+        empresa_id=tenant_id,
+        usuario_id=user_id,
+        acao="UPDATE",
+        tabela_afetada="lancamentos_financeiros",
+        registro_id=lancamento.id,
+        dados_anteriores=dados_anteriores,
+        dados_novos=lancamento.model_dump(mode='json')
+    )
+
+    session.add(log)
+    
+    session.commit()
+    session.refresh(lancamento)
+    return lancamento
+
+@router.post("/manutencao/{lancamento_id}/estornar")
+def estornar_pagamento(
+    lancamento_id: str,
+    session: Session = Depends(get_session),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Desfaz a liquidação de um lançamento.
+    """
+    try:
+        id_val = UUID(lancamento_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID de lançamento inválido")
+
+    lancamento = session.get(LancamentoFinanceiro, id_val)
+    if not lancamento or lancamento.empresa_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+    if lancamento.status != StatusLancamento.PAGO:
+        raise HTTPException(status_code=400, detail="Apenas lançamentos pagos podem ser estornados")
+
+    # Guardar estado para auditoria
+    dados_anteriores = lancamento.model_dump(mode='json')
+
+    # Reverter saldo bancário se houver conta
+    if lancamento.conta_bancaria_id:
+        conta = session.get(ContaBancaria, lancamento.conta_bancaria_id)
+        if conta:
+            valor = lancamento.valor_pago or lancamento.valor_previsto
+            if lancamento.natureza == NaturezaFinanceira.RECEBER:
+                conta.saldo_atual -= valor
+            else:
+                conta.saldo_atual += valor
+            session.add(conta)
+
+    # Reverter status
+    lancamento.status = StatusLancamento.ABERTO
+    lancamento.data_pagamento = None
+    lancamento.valor_pago = 0
+    session.add(lancamento)
+
+    # Log Auditoria
+    log = LogAuditoria(
+        empresa_id=tenant_id,
+        usuario_id=user_id,
+        acao="VOID",
+        tabela_afetada="lancamentos_financeiros",
+        registro_id=lancamento.id,
+        dados_anteriores=dados_anteriores,
+        dados_novos=lancamento.model_dump(mode='json')
+    )
+    session.add(log)
+    
+    session.commit()
+    return {"message": "Estorno realizado com sucesso"}
 
 @router.get("/")
 def list_lancamentos(
@@ -67,29 +185,66 @@ def list_lancamentos(
 
 @router.post("/", response_model=LancamentoFinanceiro, status_code=status.HTTP_201_CREATED)
 def create_lancamento(
-    lancamento: LancamentoFinanceiro,
+    payload: LancamentoCreate,
     tenant_id: UUID = Depends(get_current_tenant_id),
     user_id: UUID = Depends(get_current_user_id),
     session: Session = Depends(get_session)
 ):
     """
     Cria um novo lançamento financeiro (Provisão ou Caixa).
+    Suporta parametrização via tipo_evento para buscar conta contábil automaticamente.
     """
-    lancamento.empresa_id = tenant_id
-    lancamento.usuario_criacao_id = user_id
+    
+    # 1. Resolver Plano de Contas via RegraContabil se tipo_evento for fornecido
+    plano_contas_id = payload.plano_contas_id
+    
+    if payload.tipo_evento:
+        # Busca a regra configurada para a empresa, evento e natureza
+        stmt_regra = select(RegraContabil).where(
+            RegraContabil.empresa_id == tenant_id,
+            RegraContabil.tipo_evento == payload.tipo_evento,
+            RegraContabil.natureza == payload.natureza,
+            RegraContabil.ativo == True
+        )
+        regra = session.exec(stmt_regra).first()
+        
+        if not regra:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Regra Contábil não configurada para o evento {payload.tipo_evento} e natureza {payload.natureza}."
+            )
+        
+        # Convenção: PAGAR -> Débito | RECEBER -> Crédito
+        if payload.natureza == NaturezaFinanceira.PAGAR:
+            plano_contas_id = regra.conta_debito_id
+        else:
+            plano_contas_id = regra.conta_credito_id
+
+    # Validação final: plano_contas_id é obrigatório para salvar no DB
+    if not plano_contas_id:
+        raise HTTPException(
+            status_code=400, 
+            detail="Classificação (Plano de Contas) é obrigatória."
+        )
+
+    # 2. Criar objeto do Model
+    novo_lancamento = LancamentoFinanceiro(
+        **payload.model_dump(exclude={"tipo_evento", "plano_contas_id"}),
+        plano_contas_id=plano_contas_id,
+        empresa_id=tenant_id,
+        usuario_criacao_id=user_id
+    )
     
     # Defaults se for CAIXA (liquidação imediata)
-    if lancamento.tipo == TipoLancamento.CAIXA:
-        lancamento.status = StatusLancamento.PAGO
-        lancamento.data_pagamento = lancamento.data_pagamento or date.today()
-        lancamento.valor_pago = lancamento.valor_previsto
-        lancamento.usuario_liquidacao_id = user_id 
-        # Nota: Lançamento imediato de caixa geralmente não exige SoD, 
-        # pois não há aprovação posterior, é uma transação direta.
+    if novo_lancamento.tipo == TipoLancamento.CAIXA:
+        novo_lancamento.status = StatusLancamento.PAGO
+        novo_lancamento.data_pagamento = novo_lancamento.data_pagamento or date.today()
+        novo_lancamento.valor_pago = novo_lancamento.valor_previsto
+        novo_lancamento.usuario_liquidacao_id = user_id 
     
-    session.add(lancamento)
+    session.add(novo_lancamento)
     session.commit()
-    session.refresh(lancamento)
+    session.refresh(novo_lancamento)
     
     # Log de Auditoria
     log = LogAuditoria(
@@ -97,13 +252,13 @@ def create_lancamento(
         usuario_id=user_id,
         acao="CREATE",
         tabela_afetada="lancamentos_financeiros",
-        registro_id=lancamento.id,
-        dados_novos=lancamento.model_dump(mode='json')
+        registro_id=novo_lancamento.id,
+        dados_novos=novo_lancamento.model_dump(mode='json')
     )
     session.add(log)
     session.commit()
     
-    return lancamento
+    return novo_lancamento
 
 class LiquidacaoPayload(BaseModel):
     valor_pago: Decimal
@@ -193,23 +348,42 @@ def liquidar_lancamento(
     
     return {"message": "Liquidação realizada com sucesso", "lancamento": lancamento}
 
-@router.get("/extrato", response_model=List[LancamentoFinanceiro])
+@router.get("/extrato", response_model=ExtratoPaginatedRead)
 def get_extrato(
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
     conta_bancaria_id: Optional[UUID] = None,
+    page: int = 1,
+    size: int = 10,
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session)
 ):
     """
-    Retorna o extrato de movimentações (Regime de Caixa).
-    Inclui apenas lançamentos pagos ou diretos de caixa.
+    Retorna o extrato de movimentações (Regime de Caixa) com paginação tradicional.
     """
-    stmt = select(LancamentoFinanceiro).where(
+    # Base query para dados
+    stmt = select(
+        LancamentoFinanceiro.id,
+        LancamentoFinanceiro.descricao,
+        LancamentoFinanceiro.natureza,
+        LancamentoFinanceiro.valor_pago,
+        LancamentoFinanceiro.data_pagamento,
+        LancamentoFinanceiro.documento,
+        ContaBancaria.nome.label("conta_nome"),
+        PlanoConta.nome.label("categoria_nome"),
+        Parceiro.nome_razao.label("parceiro_nome")
+    ).join(
+        ContaBancaria, LancamentoFinanceiro.conta_bancaria_id == ContaBancaria.id, isouter=True
+    ).join(
+        PlanoConta, LancamentoFinanceiro.plano_contas_id == PlanoConta.id, isouter=True
+    ).join(
+        Parceiro, LancamentoFinanceiro.parceiro_id == Parceiro.id, isouter=True
+    ).where(
         LancamentoFinanceiro.empresa_id == tenant_id,
         LancamentoFinanceiro.status == StatusLancamento.PAGO
     )
     
+    # Filtros
     if data_inicio:
         stmt = stmt.where(LancamentoFinanceiro.data_pagamento >= data_inicio)
     if data_fim:
@@ -217,9 +391,49 @@ def get_extrato(
     if conta_bancaria_id:
         stmt = stmt.where(LancamentoFinanceiro.conta_bancaria_id == conta_bancaria_id)
         
+    # Ordenação
     stmt = stmt.order_by(LancamentoFinanceiro.data_pagamento.desc())
+
+    # Contagem total (Executada de forma simples para evitar problemas com subqueries no SQLite)
+    count_stmt = select(func.count(LancamentoFinanceiro.id)).where(
+        LancamentoFinanceiro.empresa_id == tenant_id,
+        LancamentoFinanceiro.status == StatusLancamento.PAGO
+    )
+    if data_inicio:
+        count_stmt = count_stmt.where(LancamentoFinanceiro.data_pagamento >= data_inicio)
+    if data_fim:
+        count_stmt = count_stmt.where(LancamentoFinanceiro.data_pagamento <= data_fim)
+    if conta_bancaria_id:
+        count_stmt = count_stmt.where(LancamentoFinanceiro.conta_bancaria_id == conta_bancaria_id)
     
-    return session.exec(stmt).all()
+    total = session.exec(count_stmt).one() or 0
+
+    # Paginação
+    stmt = stmt.offset((page - 1) * size).limit(size)
+    results = session.exec(stmt).all()
+    
+    items = [
+        {
+            "id": r[0],
+            "descricao": r[1],
+            "natureza": r[2],
+            "valor_pago": r[3],
+            "data_pagamento": r[4],
+            "documento": r[5],
+            "conta_nome": r[6],
+            "categoria_nome": r[7],
+            "parceiro_nome": r[8]
+        }
+        for r in results
+    ]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": max(1, (total + size - 1) // size)
+    }
 
 @router.get("/contas-bancarias", response_model=List[ContaBancaria])
 def list_contas_bancarias(
@@ -240,31 +454,34 @@ def get_dashboard_stats(
     """
     Retorna estatísticas consolidadas para o dashboard.
     """
-    # 1. Saldo Total em Contas
+    # 1. Saldo Total em Contas (Query 1)
     saldo_total = session.exec(
         select(func.sum(ContaBancaria.saldo_atual))
         .where(ContaBancaria.empresa_id == tenant_id)
     ).first() or Decimal('0.00')
 
-    # 2. Total a Pagar (Aberto)
-    a_pagar = session.exec(
-        select(func.sum(LancamentoFinanceiro.valor_previsto))
-        .where(
-            LancamentoFinanceiro.empresa_id == tenant_id,
-            LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
-            LancamentoFinanceiro.status == StatusLancamento.ABERTO
-        )
-    ).first() or Decimal('0.00')
-
-    # 3. Total a Receber (Aberto)
-    a_receber = session.exec(
-        select(func.sum(LancamentoFinanceiro.valor_previsto))
-        .where(
-            LancamentoFinanceiro.empresa_id == tenant_id,
-            LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
-            LancamentoFinanceiro.status == StatusLancamento.ABERTO
-        )
-    ).first() or Decimal('0.00')
+    # 2 e 3. Totais a Pagar e Receber (Query 2 - Otimizada com CASE)
+    from sqlalchemy import case, and_
+    stats_stmt = select(
+        func.sum(case(
+            (and_(
+                LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR, 
+                LancamentoFinanceiro.status == StatusLancamento.ABERTO
+            ), LancamentoFinanceiro.valor_previsto),
+            else_=0
+        )).label("a_pagar"),
+        func.sum(case(
+            (and_(
+                LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER, 
+                LancamentoFinanceiro.status == StatusLancamento.ABERTO
+            ), LancamentoFinanceiro.valor_previsto),
+            else_=0
+        )).label("a_receber")
+    ).where(LancamentoFinanceiro.empresa_id == tenant_id)
+    
+    stats_res = session.exec(stats_stmt).first()
+    a_pagar = stats_res[0] if stats_res else 0
+    a_receber = stats_res[1] if stats_res else 0
 
     return {
         "saldo_bancario": float(saldo_total),

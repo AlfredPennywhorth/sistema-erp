@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from datetime import datetime
-from app.api.v1.endpoints import tenants, team, contador, financeiro, parceiros
+from app.api.v1.endpoints import tenants, team, contador, financeiro, parceiros, accounting
 from app.core.middleware import get_empresa_id_middleware
 from app.models.database import create_db_and_tables
 
@@ -54,7 +54,12 @@ async def log_requests(request, call_next):
 # 3. Configuração de CORS (ADICIONADO POR ÚLTIMO = EXECUTADO PRIMEIRO)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,6 +72,7 @@ app.include_router(team.router, prefix="/api/v1/team", tags=["Team Management"])
 app.include_router(contador.router, prefix="/api/v1/contador", tags=["Accountant Portal"])
 app.include_router(financeiro.router, prefix="/api/v1/financeiro", tags=["Módulo Financeiro"])
 app.include_router(parceiros.router, prefix="/api/v1/parceiros", tags=["Gestão de Parceiros"])
+app.include_router(accounting.router, prefix="/api/v1/accounting", tags=["Contabilidade"])
 
 @app.get("/api/v1/health", tags=["Infra"])
 async def health_check():
@@ -87,4 +93,10 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import sys
+    try:
+        print("\n--- [STARTUP] Iniciando Uvicorn na porta 8000... ---")
+        uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    except Exception as e:
+        print(f"\n--- [ERRO CRÍTICO] Falha ao iniciar servidor: {e} ---")
+        sys.exit(1)

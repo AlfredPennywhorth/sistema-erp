@@ -163,7 +163,8 @@ def setup_tenant(
 @router.get("/me", response_model=Dict[str, Any])
 def get_current_tenant_info(
     session: Session = Depends(get_session),
-    tenant_id: str = Header(None, alias="X-Tenant-ID")
+    tenant_id: str = Header(None, alias="X-Tenant-ID"),
+    user_id: str = Header(None, alias="X-User-ID")
 ):
     """
     Retorna as informações da empresa conectada ao Tenant ID atual.
@@ -178,13 +179,28 @@ def get_current_tenant_info(
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada.")
             
-        return {
+        data = {
             "id": str(empresa.id),
             "razao_social": empresa.razao_social,
             "nome_fantasia": empresa.nome_fantasia,
             "cnpj": empresa.cnpj,
-            "logo_url": empresa.configuracoes.get("logo_url") if empresa.configuracoes else None
+            "logo_url": empresa.configuracoes.get("logo_url") if empresa.configuracoes else None,
+            "user_role": None
         }
+
+        # Tentar buscar a role do usuário
+        if user_id:
+            from app.models.database import UsuarioEmpresa
+            user_uuid = user_id if isinstance(user_id, UUID) else UUID(user_id)
+            stmt = select(UsuarioEmpresa).where(
+                UsuarioEmpresa.usuario_id == user_uuid,
+                UsuarioEmpresa.empresa_id == tenant_uuid
+            )
+            vinculo = session.exec(stmt).first()
+            if vinculo:
+                data["user_role"] = vinculo.role
+
+        return data
     except ValueError:
         raise HTTPException(status_code=400, detail="Tenant ID inválido.")
     except Exception as e:

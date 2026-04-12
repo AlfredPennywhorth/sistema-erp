@@ -19,16 +19,11 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // Sem usuário → login
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Usuário autenticado sem empresa selecionada → seleção de empresa
-  // Rotas que não exigem tenant ativo:
-  const rotasPublicas = ['/login', '/register', '/onboarding', '/selecionar-empresa'];
-  if (!activeTenant && !rotasPublicas.includes(location.pathname)) {
-    return <Navigate to="/selecionar-empresa" replace />;
+  // 2. Redirecionamento Mandatório (Passo 1)
+  const isPublic = ['/login', '/register', '/onboarding', '/selecionar-empresa'].includes(location.pathname);
+  
+  if (isAuthenticated && !activeTenant && !isPublic) {
+    return <Navigate to="/selecionar-empresa" />;
   }
 
   return children;

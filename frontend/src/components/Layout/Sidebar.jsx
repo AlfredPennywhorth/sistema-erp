@@ -15,7 +15,8 @@ import {
   Wallet,
   Settings2,
   Building2,
-  ArrowLeftRight
+  ArrowLeftRight,
+  BookOpen
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -40,7 +41,18 @@ const Sidebar = () => {
     { icon: <ShieldCheck size={20} />, label: 'Equipe', path: '/equipe' },
     { icon: <BarChart3 size={20} />, label: 'Relatórios', path: '/relatorios' },
     { icon: <Settings2 size={20} />, label: 'Plano de Contas', path: '/financeiro/plano-contas' },
+    { 
+      icon: <BookOpen size={20} />, 
+      label: 'Regras Contábeis', 
+      path: '/financeiro/regras-contabeis',
+      allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER']
+    },
   ];
+
+  const filteredOtherItems = otherMenuItems.filter(item => {
+    if (!item.allowedRoles) return true;
+    return item.allowedRoles.includes(empresa?.user_role);
+  });
 
   const MenuItem = ({ item }) => (
     <Link
@@ -136,7 +148,7 @@ const Sidebar = () => {
               Gestão e Cadastros
             </p>
           )}
-          {otherMenuItems.map((item) => <MenuItem key={item.path} item={item} />)}
+          {filteredOtherItems.map((item) => <MenuItem key={item.path} item={item} />)}
         </div>
       </nav>
 

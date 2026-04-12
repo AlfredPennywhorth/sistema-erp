@@ -90,7 +90,10 @@ export const AuthProvider = ({ children }) => {
   const validateTenantBackground = async (tenantId) => {
     try {
       const res = await api.get('/tenants/me', {
-        headers: { 'X-Tenant-ID': tenantId }
+        headers: { 
+          'X-Tenant-ID': tenantId,
+          'X-User-ID': readCache(CACHE_KEY_USER)?.id
+        }
       });
       if (res?.data) {
         setActiveTenant(res.data);
@@ -142,8 +145,20 @@ export const AuthProvider = ({ children }) => {
   // ─── LOGIN ─────────────────────────────────────────────────────────────────
   async function login(email, password) {
     // Modo MOCK
-    if (email === 'admin-mock' || email === 'admin') {
-      const mockUser = { id: '00000000-0000-0000-0000-000000000000', email: 'admin@erp.com', user_metadata: { full_name: 'Administrador Demo' } };
+    const mockEmail = email.toLowerCase();
+    if (mockEmail === 'admin' || mockEmail === 'operador' || mockEmail === 'admin-mock') {
+      const isOperador = mockEmail === 'operador';
+      
+      const mockUser = { 
+        id: isOperador 
+          ? '11111111-1111-1111-1111-111111111111' 
+          : '00000000-0000-0000-0000-000000000000', 
+        email: isOperador ? 'operador@erp.com' : 'admin@erp.com', 
+        user_metadata: { 
+          full_name: isOperador ? 'Operador Financeiro' : 'Administrador Demo' 
+        } 
+      };
+
       localStorage.setItem('erp_mock_user', JSON.stringify(mockUser));
       setUser(mockUser);
       setSession({ access_token: 'mock-token', user: mockUser });

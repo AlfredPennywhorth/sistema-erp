@@ -13,8 +13,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // 2. Cliente Axios (Backend FastAPI)
 export const api = axios.create({
+  // Fallback para localhost:8000 se a variável não estiver no .env
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1',
-  timeout: 12000,
+  timeout: 15000, // Aumentado para 15s para suportar cold starts no Supabase
 });
 
 const isDebug = import.meta.env.VITE_DEBUG_MODE === 'true';
@@ -110,7 +111,7 @@ api.interceptors.response.use(
       // Só dispara o evento se estava online antes (evita spam)
       if (!isOffline) {
         isOffline = true;
-        console.error('🚨 [REDE] Backend inacessível:', error.code || 'ERR_NETWORK');
+        console.error('🚨 [REDE] Backend inacessível:', error.code || 'ERR_NETWORK', error.config?.url);
         window.dispatchEvent(new CustomEvent('server-offline'));
       }
     } else {
@@ -119,8 +120,11 @@ api.interceptors.response.use(
         isOffline = false;
         window.dispatchEvent(new CustomEvent('server-online'));
       }
+      // Log de erro centralizado
+      console.error('❌ [API ERROR]:', error.config?.url, error.response?.status, error.response?.data);
+
       if (isDebug) {
-        console.error('❌ [AXIOS] Error:', error.response.status, error.config?.url, error.response.data);
+        console.error('❌ [AXIOS] Full Error:', error.response?.status, error.config?.url, error.response?.data);
       }
     }
 

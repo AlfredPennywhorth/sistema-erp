@@ -95,21 +95,21 @@ const Dashboard = () => {
   const statCards = [
     { 
       label: 'Saldo em Caixa', 
-      value: `R$ ${saldoBancario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
+      value: `R$ ${Number(saldoBancario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
       badge: 'Disponível', 
       color: 'indigo',
       icon: <Wallet size={20} className="text-indigo-500" />,
     },
     { 
       label: 'A Receber (Aberto)', 
-      value: `R$ ${contasReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
+      value: `R$ ${Number(contasReceber).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
       badge: 'Previsão',
       color: 'emerald',
       icon: <ArrowUpCircle size={20} className="text-emerald-500" />,
     },
     { 
       label: 'A Pagar (Aberto)', 
-      value: `R$ ${contasPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
+      value: `R$ ${Number(contasPagar).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
       badge: 'Compromissos',
       color: 'rose',
       icon: <ArrowDownCircle size={20} className="text-rose-500" />,

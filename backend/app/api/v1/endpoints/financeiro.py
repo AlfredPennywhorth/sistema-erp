@@ -150,11 +150,16 @@ def estornar_pagamento(
 def list_lancamentos(
     natureza: Optional[NaturezaFinanceira] = None,
     status_filtro: Optional[StatusLancamento] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    descricao: Optional[str] = None,
+    parceiro_id: Optional[UUID] = None,
+    plano_contas_id: Optional[UUID] = None,
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session)
 ):
     """
-    Lista os lançamentos financeiros da empresa ativa, com dados do parceiro.
+    Lista os lançamentos financeiros da empresa ativa, com dados do parceiro e filtros aplicados.
     """
     from app.models.database import Parceiro
     from sqlalchemy.orm import selectinload
@@ -169,6 +174,16 @@ def list_lancamentos(
         stmt = stmt.where(LancamentoFinanceiro.natureza == natureza)
     if status_filtro:
         stmt = stmt.where(LancamentoFinanceiro.status == status_filtro)
+    if data_inicio:
+        stmt = stmt.where(LancamentoFinanceiro.data_vencimento >= data_inicio)
+    if data_fim:
+        stmt = stmt.where(LancamentoFinanceiro.data_vencimento <= data_fim)
+    if descricao:
+        stmt = stmt.where(LancamentoFinanceiro.descricao.ilike(f"%{descricao}%"))
+    if parceiro_id:
+        stmt = stmt.where(LancamentoFinanceiro.parceiro_id == parceiro_id)
+    if plano_contas_id:
+        stmt = stmt.where(LancamentoFinanceiro.plano_contas_id == plano_contas_id)
 
     stmt = stmt.order_by(LancamentoFinanceiro.data_vencimento.asc())
     lancamentos = session.exec(stmt).all()
@@ -353,6 +368,9 @@ def get_extrato(
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
     conta_bancaria_id: Optional[UUID] = None,
+    descricao: Optional[str] = None,
+    parceiro_id: Optional[UUID] = None,
+    categoria_id: Optional[UUID] = None,
     page: int = 1,
     size: int = 10,
     tenant_id: UUID = Depends(get_current_tenant_id),
@@ -390,6 +408,12 @@ def get_extrato(
         stmt = stmt.where(LancamentoFinanceiro.data_pagamento <= data_fim)
     if conta_bancaria_id:
         stmt = stmt.where(LancamentoFinanceiro.conta_bancaria_id == conta_bancaria_id)
+    if descricao:
+        stmt = stmt.where(LancamentoFinanceiro.descricao.ilike(f"%{descricao}%"))
+    if parceiro_id:
+        stmt = stmt.where(LancamentoFinanceiro.parceiro_id == parceiro_id)
+    if categoria_id:
+        stmt = stmt.where(LancamentoFinanceiro.plano_contas_id == categoria_id)
         
     # Ordenação
     stmt = stmt.order_by(LancamentoFinanceiro.data_pagamento.desc())
@@ -405,6 +429,12 @@ def get_extrato(
         count_stmt = count_stmt.where(LancamentoFinanceiro.data_pagamento <= data_fim)
     if conta_bancaria_id:
         count_stmt = count_stmt.where(LancamentoFinanceiro.conta_bancaria_id == conta_bancaria_id)
+    if descricao:
+        count_stmt = count_stmt.where(LancamentoFinanceiro.descricao.ilike(f"%{descricao}%"))
+    if parceiro_id:
+        count_stmt = count_stmt.where(LancamentoFinanceiro.parceiro_id == parceiro_id)
+    if categoria_id:
+        count_stmt = count_stmt.where(LancamentoFinanceiro.plano_contas_id == categoria_id)
     
     total = session.exec(count_stmt).one() or 0
 

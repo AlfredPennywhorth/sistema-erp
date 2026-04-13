@@ -25,8 +25,9 @@ const InviteModal = ({ isOpen, onClose, onInviteSuccess }) => {
         setInviteToken(response.data.token);
         setShowSuccess(true);
       }
-      setIsSending(false); // Para o spinner antes de recarregar a lista
+      setIsSending(false);
       onInviteSuccess();
+      // Não limpa o link IMEDIATAMENTE para permitir cópia
     } catch (err) {
       setIsSending(false);
       console.error("Erro ao enviar convite:", err);

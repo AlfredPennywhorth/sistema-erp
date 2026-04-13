@@ -19,11 +19,16 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // 2. Redirecionamento Mandatório (Passo 1)
-  const isPublic = ['/login', '/register', '/onboarding', '/selecionar-empresa'].includes(location.pathname);
-  
-  if (isAuthenticated && !activeTenant && !isPublic) {
-    return <Navigate to="/selecionar-empresa" />;
+  // 1. Redirecionar para login se não estiver autenticado e não for pública
+  const isPublic = ['/login', '/register'].includes(location.pathname);
+  if (!isAuthenticated && !isPublic) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // 2. Redirecionar para seleção se estiver logado mas sem tenant (excluindo páginas de setup)
+  const isSetupOrSelection = ['/onboarding', '/selecionar-empresa', '/login'].includes(location.pathname);
+  if (isAuthenticated && !activeTenant && !isSetupOrSelection) {
+    return <Navigate to="/selecionar-empresa" replace />;
   }
 
   return children;

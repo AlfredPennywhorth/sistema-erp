@@ -35,10 +35,7 @@ export default function SelectTenant() {
       const list = res.data || [];
       setTenants(list);
 
-      // Auto-select se apenas 1 empresa
-      if (list.length === 1 && !activeTenant) {
-        handleSelect(list[0]);
-      }
+      // Auto-select removido daqui (agora gerenciado pelo fluxo de login/contexto)
     } catch (err) {
       console.error('[SelectTenant] Erro ao carregar empresas:', err);
       setError('Não foi possível conectar ao servidor. Verifique se o backend está ativo.');
@@ -73,26 +70,41 @@ export default function SelectTenant() {
     );
   }
 
-  // ─── Erro de conexão ───────────────────────────────────────────────────────
-  if (error && tenants.length === 0) {
+  // ─── Caso C: Nenhuma empresa vinculada (Empty State) ────────────────────────
+  if (!loading && tenants.length === 0) {
     return (
-      <div className="min-h-screen bg-[#020817] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-5 max-w-sm text-center">
-          <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center">
-            <AlertTriangle size={32} className="text-rose-500" />
+      <div className="min-h-screen bg-[#020817] flex items-center justify-center p-6 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-6 max-w-lg text-center bg-slate-900/50 p-12 rounded-[2.5rem] border border-white/5 backdrop-blur-xl shadow-2xl"
+        >
+          <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center border border-amber-500/20 shadow-[0_0_30px_rgba(245,158,11,0.1)]">
+            <AlertTriangle size={40} className="text-amber-500" />
           </div>
           <div>
-            <h2 className="text-white font-black text-xl mb-2">Backend Offline</h2>
-            <p className="text-slate-400 text-sm leading-relaxed">{error}</p>
+            <h2 className="text-white font-black text-2xl mb-3 tracking-tight">SEM ACESSO OPERACIONAL</h2>
+            <p className="text-slate-400 text-sm leading-relaxed mb-6 font-medium">
+              Sua conta ainda não possui vínculos com nenhuma empresa. <br />
+              Por razões de segurança, o acesso aos módulos financeiros está bloqueado até que uma organização seja configurada ou vinculada.
+            </p>
           </div>
-          <button
-            onClick={fetchTenants}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all"
-          >
-            <RefreshCcw size={14} />
-            Tentar Novamente
-          </button>
-        </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <button
+              onClick={() => navigate('/onboarding')}
+              className="flex-1 flex items-center justify-center gap-3 px-8 py-4 bg-brand-primary hover:bg-brand-primary/90 text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-brand-primary/20"
+            >
+              <Plus size={18} />
+              Criar Primeira Empresa
+            </button>
+            <button
+              onClick={() => window.location.href = 'mailto:suporte@erp.com'}
+              className="px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 font-black text-xs uppercase tracking-widest rounded-2xl transition-all border border-white/5"
+            >
+              Suporte
+            </button>
+          </div>
+        </motion.div>
       </div>
     );
   }

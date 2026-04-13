@@ -29,17 +29,19 @@ const Login = () => {
     try {
       const res = await login(data.email, data.password);
       
-      // Lógica de Redirecionamento Inteligente (Multi-tenant)
-      if (res?.tenants && res.tenants.length === 1) {
-        // Se houver apenas uma empresa, seleciona automaticamente e vai para o Dashboard
+      // Lógica de Redirecionamento (Casos A, B e C)
+      const numTenants = res?.tenants?.length || 0;
+
+      if (numTenants === 1) {
+        // Caso A: 1 Empresa -> Vai direto
         await setActiveTenant(res.tenants[0].id);
         navigate('/dashboard', { replace: true });
-      } else if (res?.tenants && res.tenants.length > 1) {
-        // Se houver múltiplas, vai para a Central de Seleção
+      } else if (numTenants > 1) {
+        // Caso B: Múltiplas -> Escolha necessária
         navigate('/selecionar-empresa', { replace: true });
       } else {
-        // Sem empresas vinculadas (ou em onboarding incompleto)
-        navigate('/onboarding', { replace: true });
+        // Caso C: 0 Empresas -> Leva ao SelectTenant que mostrará o bloqueio/onboarding
+        navigate('/selecionar-empresa', { replace: true });
       }
     } catch (err) {
       console.error(err);

@@ -128,12 +128,13 @@ def list_team_members(
 @router.post("/invite", status_code=status.HTTP_201_CREATED)
 def invite_member(
     invite_data: dict, # email, role
+    background_tasks: BackgroundTasks,
     tenant_id: UUID = Depends(get_current_tenant_id),
     db: Session = Depends(get_session)
-    # auth: bool = admin_only
 ):
     """
-    Gera um token de convite e envia o e-mail (ou apenas retorna o link em dev).
+    Gera um token de convite e agenda o envio do e-mail em background.
+    O link é retornado imediatamente para permitir cópia manual em caso de falha de e-mail.
     """
     try:
         email = invite_data.get("email")
@@ -147,7 +148,7 @@ def invite_member(
         # 1. Gerar token único
         token = str(uuid4())
         
-        # 2. Criar registro de convite
+        # 2. Criar registro de convite (Síncrono/Rápido)
         db_invite = Invite(
             empresa_id=tenant_id,
             email=email,
@@ -159,38 +160,38 @@ def invite_member(
         db.add(db_invite)
         db.commit()
 
-        # 3. Gerar Link
-        invite_link = f"http://localhost:5173/finalizar-registro?token={token}"
+        # 3. Gerar Link (Sempre disponível para o Frontend)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        invite_link = f"{frontend_url}/finalizar-registro?token={token}"
         
         # Buscar nome da empresa para o e-mail
         empresa = db.get(Empresa, tenant_id)
         company_name = empresa.razao_social if empresa else "Sua Empresa"
         
-        # 4. Enviar e-mail ou Bypass em Dev
+        # 4. Agendar Envio de E-mail ou Log em Dev (Assíncrono)
         env = os.getenv("ENVIRONMENT", "production")
         dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
-        email_status = "simulated"
         
-        if env == "development" or dev_mode:
-            print("\n" + "="*50)
-            print(f"--- [MODO DESENVOLVIMENTO] CONVITE GERADO ---")
-            print(f"Destinatário: {email}")
-            print(f"Empresa: {company_name}")
-            print(f"LINK DE ACESSO: {invite_link}")
-            print("="*50 + "\n")
-            email_status = "bypassed_in_dev"
-        else:
+        def process_email_sending():
             try:
-                email_status = ResendService.send_invite_email(email, company_name, invite_link)
+                if env == "development" or dev_mode:
+                    print("\n" + "="*50)
+                    print(f"--- [MODO DESENVOLVIMENTO] CONVITE EM BACKGROUND ---")
+                    print(f"Destinatário: {email}")
+                    print(f"LINK: {invite_link}")
+                    print("="*50 + "\n")
+                else:
+                    ResendService.send_invite_email(email, company_name, invite_link)
             except Exception as e:
-                print(f"ALERTA: Falha no envio de e-mail real: {str(e)}")
-                email_status = f"error: {str(e)}"
+                print(f"!!! [BACKGROUND ERROR] Falha no disparo de e-mail: {str(e)} !!!")
+
+        background_tasks.add_task(process_email_sending)
 
         return {
-            "message": "Convite processado com sucesso!",
+            "message": "Convite registrado com sucesso!",
             "token": token,
-            "invite_link": invite_link if (env == "development" or dev_mode) else None,
-            "email_status": email_status
+            "invite_link": invite_link,
+            "email_status": "queued"
         }
 
     except Exception as e:

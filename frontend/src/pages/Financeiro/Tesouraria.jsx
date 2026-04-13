@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, 
   ArrowUpRight, 
@@ -15,7 +15,9 @@ import {
   X,
   ChevronDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Search,
+  XCircle
 } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -27,26 +29,60 @@ const Tesouraria = () => {
   const [selectedContaId, setSelectedContaId] = useState(null);
   const [editingMovimentacao, setEditingMovimentacao] = useState(null);
   const [planoContas, setPlanoContas] = useState([]);
+  const [parceiros, setParceiros] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [paginationData, setPaginationData] = useState({ total: 0, pages: 1 });
+  
+  const [filtros, setFiltros] = useState({
+    periodo: 'mes_atual',
+    data_inicio: '',
+    data_fim: '',
+    descricao: '',
+    parceiro_id: '',
+    categoria_id: ''
+  });
+  // appliedFilters é o snapshot dos filtros no momento em que o usuário clicou "Aplicar".
+  // Isso evita o bug de closure stale: o useEffect reage a appliedFilters, não a filtros.
+  const [appliedFilters, setAppliedFilters] = useState({
+    periodo: 'mes_atual',
+    data_inicio: '',
+    data_fim: '',
+    descricao: '',
+    parceiro_id: '',
+    categoria_id: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  // Reage a qualquer mudança nos filtros aplicados, conta selecionada, página ou tamanho de página.
   useEffect(() => {
     if (!loading) {
-      handleFilterExtrato();
+      handleFilterExtrato(appliedFilters);
     }
-  }, [selectedContaId, currentPage, pageSize]);
+  }, [appliedFilters, selectedContaId, currentPage, pageSize]);
+
+  useEffect(() => {
+    fetchParceiros();
+  }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      const periodo = getPeriodoDates();
       const [contasRes, extratoRes, planoRes] = await Promise.all([
         api.get('/financeiro/contas-bancarias'),
-        api.get('/financeiro/extrato', { params: { page: currentPage, size: pageSize } }),
+        api.get('/financeiro/extrato', { 
+          params: { 
+            page: currentPage, 
+            size: pageSize,
+            ...(periodo.data_inicio && { data_inicio: periodo.data_inicio }),
+            ...(periodo.data_fim && { data_fim: periodo.data_fim })
+          } 
+        }),
         api.get('/financeiro/plano-contas')
       ]);
       setContas(contasRes.data || []);
@@ -63,15 +99,95 @@ const Tesouraria = () => {
     }
   };
 
-  const handleFilterExtrato = async () => {
+  const fetchParceiros = async () => {
+    try {
+      const res = await api.get('/parceiros');
+      setParceiros(res.data || []);
+    } catch (err) {
+      console.error("Erro ao carregar parceiros:", err);
+    }
+  };
+
+  const getPeriodoDates = () => {
+    const now = new Date();
+    const ano = now.getFullYear();
+    const mes = now.getMonth();
+    
+    if (filtros.periodo === 'mes_atual') {
+      const primeiroDia = new Date(ano, mes, 1);
+      const ultimoDia = new Date(ano, mes + 1, 0);
+      return {
+        data_inicio: primeiroDia.toISOString().split('T')[0],
+        data_fim: ultimoDia.toISOString().split('T')[0]
+      };
+    } else if (filtros.periodo === 'mes_anterior') {
+      const primeiroDia = new Date(ano, mes - 1, 1);
+      const ultimoDia = new Date(ano, mes, 0);
+      return {
+        data_inicio: primeiroDia.toISOString().split('T')[0],
+        data_fim: ultimoDia.toISOString().split('T')[0]
+      };
+    } else if (filtros.periodo === 'ultimos_3_meses') {
+      const primeiroDia = new Date(ano, mes - 2, 1);
+      const ultimoDia = new Date(ano, mes + 1, 0);
+      return {
+        data_inicio: primeiroDia.toISOString().split('T')[0],
+        data_fim: ultimoDia.toISOString().split('T')[0]
+      };
+    } else if (filtros.periodo === 'personalizado') {
+      return {
+        data_inicio: filtros.data_inicio,
+        data_fim: filtros.data_fim
+      };
+    }
+    return { data_inicio: '', data_fim: '' };
+  };
+
+  // Recebe os filtros como argumento explícito para evitar closure stale.
+  const handleFilterExtrato = async (filtrosAtivos = appliedFilters) => {
     try {
       setExtratoLoading(true);
+      // Calcula as datas de período com base nos filtros recebidos como argumento
+      const getPeriodoFromFiltros = (f) => {
+        const now = new Date();
+        const ano = now.getFullYear();
+        const mes = now.getMonth();
+        if (f.periodo === 'mes_atual') {
+          return {
+            data_inicio: new Date(ano, mes, 1).toISOString().split('T')[0],
+            data_fim: new Date(ano, mes + 1, 0).toISOString().split('T')[0]
+          };
+        } else if (f.periodo === 'mes_anterior') {
+          return {
+            data_inicio: new Date(ano, mes - 1, 1).toISOString().split('T')[0],
+            data_fim: new Date(ano, mes, 0).toISOString().split('T')[0]
+          };
+        } else if (f.periodo === 'ultimos_3_meses') {
+          return {
+            data_inicio: new Date(ano, mes - 2, 1).toISOString().split('T')[0],
+            data_fim: new Date(ano, mes + 1, 0).toISOString().split('T')[0]
+          };
+        } else if (f.periodo === 'personalizado') {
+          return { data_inicio: f.data_inicio, data_fim: f.data_fim };
+        }
+        return { data_inicio: '', data_fim: '' };
+      };
+
+      const periodo = getPeriodoFromFiltros(filtrosAtivos);
       const params = { 
         page: currentPage,
         size: pageSize,
-        ...(selectedContaId && { conta_bancaria_id: selectedContaId })
+        ...(selectedContaId && { conta_bancaria_id: selectedContaId }),
+        ...(periodo.data_inicio && { data_inicio: periodo.data_inicio }),
+        ...(periodo.data_fim && { data_fim: periodo.data_fim }),
+        ...(filtrosAtivos.descricao && { descricao: filtrosAtivos.descricao }),
+        ...(filtrosAtivos.parceiro_id && { parceiro_id: filtrosAtivos.parceiro_id }),
+        ...(filtrosAtivos.categoria_id && { categoria_id: filtrosAtivos.categoria_id })
       };
+      // Log para auditoria — visível no DevTools > Console
+      console.log('[TESOURARIA] GET /financeiro/extrato params:', params);
       const res = await api.get('/financeiro/extrato', { params });
+      console.log('[TESOURARIA] Resposta:', res.data?.total, 'total,', res.data?.items?.length, 'itens nesta página');
       setExtrato(res.data?.items || []);
       setPaginationData({
         total: res.data?.total || 0,
@@ -84,6 +200,72 @@ const Tesouraria = () => {
     }
   };
 
+  const limparFiltros = () => {
+    const filtrosReset = {
+      periodo: 'mes_atual',
+      data_inicio: '',
+      data_fim: '',
+      descricao: '',
+      parceiro_id: '',
+      categoria_id: ''
+    };
+    setFiltros(filtrosReset);
+    // Aplica reset imediatamente (sem depender do useEffect de filtros)
+    setAppliedFilters(filtrosReset);
+    setCurrentPage(1);
+    setSelectedContaId(null);
+  };
+
+  const exportarCSV = async () => {
+    try {
+      const periodo = getPeriodoDates();
+      const params = { 
+        size: 10000,
+        page: 1,
+        ...(selectedContaId && { conta_bancaria_id: selectedContaId }),
+        ...(periodo.data_inicio && { data_inicio: periodo.data_inicio }),
+        ...(periodo.data_fim && { data_fim: periodo.data_fim }),
+        ...(filtros.descricao && { descricao: filtros.descricao }),
+        ...(filtros.parceiro_id && { parceiro_id: filtros.parceiro_id }),
+        ...(filtros.categoria_id && { categoria_id: filtros.categoria_id })
+      };
+      const res = await api.get('/financeiro/extrato', { params });
+      const dados = res.data?.items || [];
+      
+      if (dados.length === 0) {
+        alert("Nenhum dado para exportar.");
+        return;
+      }
+      
+      const headers = ["Data", "Descrição", "Categoria", "Parceiro", "Valor", "Natureza"];
+      const rows = dados.map(item => [
+        item.data_pagamento ? new Date(item.data_pagamento).toLocaleDateString('pt-BR') : '',
+        item.descricao || '',
+        item.categoria_nome || '',
+        item.parceiro_nome || '',
+        item.valor_pago ? Number(item.valor_pago).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00',
+        item.natureza || ''
+      ]);
+      
+      const csvContent = [
+        headers.join(';'),
+        ...rows.map(row => row.join(';'))
+      ].join('\n');
+      
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `extrato_tesouraria_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Erro ao exportar:", err);
+      alert("Erro ao exportar dados.");
+    }
+  };
+
   const toggleContaFilter = (id) => {
     setSelectedContaId(prev => prev === id ? null : id);
     setCurrentPage(1);
@@ -93,14 +275,14 @@ const Tesouraria = () => {
     e.preventDefault();
     try {
       setExtratoLoading(true);
-      const { id, descricao, plano_contas_id, conta_bancaria_id, data: data_pagamento, valor: valor_pago } = editingMovimentacao;
+      const { id, descricao, plano_contas_id, conta_bancaria_id, data, valor } = editingMovimentacao;
       
       const payload = {
         descricao,
         plano_contas_id,
         conta_bancaria_id,
-        data_pagamento,
-        valor_pago: Number(valor_pago)
+        data_pagamento: data,
+        valor_pago: Number(valor)
       };
 
       await api.patch(`/financeiro/manutencao/${id}`, payload);
@@ -157,7 +339,10 @@ const Tesouraria = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="px-6 py-2.5 bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+          <button 
+            onClick={exportarCSV}
+            className="px-6 py-2.5 bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+          >
             <Download size={18} />
             Exportar
           </button>
@@ -216,18 +401,158 @@ const Tesouraria = () => {
             <History size={18} className="text-indigo-500" />
             Movimentação recente
           </div>
-          <div className="flex items-center gap-3">
-             <button className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400">
-               <Calendar size={14} />
-               Mês Atual
-             </button>
-             <button className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors text-slate-400">
-               <Filter size={18} />
-             </button>
-          </div>
+<div className="flex items-center gap-3">
+              <select 
+                value={filtros.periodo}
+                onChange={(e) => {
+                  const novoPeriodo = e.target.value;
+                  // Atualiza o filtro local E aplica imediatamente (exceto personalizado, que aguarda as datas)
+                  const novosFiltros = {...filtros, periodo: novoPeriodo};
+                  setFiltros(novosFiltros);
+                  if (novoPeriodo !== 'personalizado') {
+                    // Aplica período imediatamente sem precisar clicar em "Aplicar"
+                    setAppliedFilters(novosFiltros);
+                    setCurrentPage(1);
+                  }
+                }}
+                className="px-3 py-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 focus:outline-none cursor-pointer"
+              >
+                <option value="mes_atual">Mês Atual</option>
+                <option value="mes_anterior">Mês Anterior</option>
+                <option value="ultimos_3_meses">Últimos 3 Meses</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+              
+              {filtros.periodo === 'personalizado' && (
+                <>
+                  <input 
+                    type="date"
+                    value={filtros.data_inicio}
+                    onChange={(e) => setFiltros({...filtros, data_inicio: e.target.value})}
+                    className="px-2 py-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 focus:outline-none"
+                  />
+                  <span className="text-slate-400">até</span>
+                  <input 
+                    type="date"
+                    value={filtros.data_fim}
+                    onChange={(e) => setFiltros({...filtros, data_fim: e.target.value})}
+                    className="px-2 py-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const novosFiltros = {...filtros};
+                      setAppliedFilters(novosFiltros);
+                      setCurrentPage(1);
+                    }}
+                    className="px-3 py-1.5 bg-indigo-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-600 transition-colors"
+                  >
+                    OK
+                  </button>
+                </>
+              )}
+              
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-colors ${showFilters ? 'bg-indigo-50 text-indigo-500' : 'text-slate-400'}`}
+              >
+                <Filter size={18} />
+              </button>
+            </div>
         </div>
 
         <div className="overflow-x-auto">
+            {showFilters && (
+              <div className="px-8 py-4 bg-slate-50 dark:bg-white/[0.02] border-b border-slate-100 dark:border-white/5 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      placeholder="Filtrar por descrição..."
+                      value={filtros.descricao}
+                      onChange={(e) => setFiltros({...filtros, descricao: e.target.value})}
+                      className="w-full mt-1 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                    {filtros.descricao && (
+                      <button 
+                        onClick={() => setFiltros({...filtros, descricao: ''})}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <XCircle size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Parceiro</label>
+                  <div className="relative">
+                    <select 
+                      value={filtros.parceiro_id}
+                      onChange={(e) => setFiltros({...filtros, parceiro_id: e.target.value})}
+                      className="w-full mt-1 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                    >
+                      <option value="">Todos os parceiros</option>
+                      {parceiros.map(p => (
+                        <option key={p.id} value={p.id}>{p.nome_razao}</option>
+                      ))}
+                    </select>
+                    {filtros.parceiro_id && (
+                      <button 
+                        onClick={() => setFiltros({...filtros, parceiro_id: ''})}
+                        className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <XCircle size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Categoria</label>
+                  <div className="relative">
+                    <select 
+                      value={filtros.categoria_id}
+                      onChange={(e) => setFiltros({...filtros, categoria_id: e.target.value})}
+                      className="w-full mt-1 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                    >
+                      <option value="">Todas as categorias</option>
+                      {planoContas.map(p => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                    {filtros.categoria_id && (
+                      <button 
+                        onClick={() => setFiltros({...filtros, categoria_id: ''})}
+                        className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <XCircle size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-end gap-2">
+                  <button 
+                    onClick={() => {
+                      // Snapshot dos filtros atuais → dispara o useEffect
+                      setAppliedFilters({...filtros});
+                      setCurrentPage(1);
+                      setShowFilters(false);
+                    }}
+                    className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-600 transition-colors"
+                  >
+                    Aplicar
+                  </button>
+                  <button 
+                    onClick={limparFiltros}
+                    className="px-4 py-2 bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-white/20 transition-colors"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+            )}
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/5">
@@ -287,7 +612,11 @@ const Tesouraria = () => {
                     <td className="px-8 py-4">
                       <div className="flex items-center justify-center gap-2">
                         <button 
-                          onClick={() => setEditingMovimentacao({...m})}
+                          onClick={() => setEditingMovimentacao({
+                            ...m,
+                            data: m.data_pagamento ? m.data_pagamento.split('T')[0] : '',
+                            valor: m.valor_pago
+                          })}
                           className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"
                           title="Editar/Reclassificar"
                         >

@@ -60,17 +60,31 @@ function AppContent() {
     };
   }, [isAuthenticated]);
 
-  // ✅ FASE 3: Escutar eventos de conectividade disparados pelo api.js
+  // ✅ FASE 3: Escutar eventos de conectividade e Auto-Reconnect
   useEffect(() => {
     const handleOffline = () => setServerOffline(true);
     const handleOnline = () => setServerOffline(false);
     window.addEventListener('server-offline', handleOffline);
     window.addEventListener('server-online', handleOnline);
+
+    // Pinger de saúde: Tenta reconectar a cada 10s se estiver offline
+    const pinger = setInterval(async () => {
+      if (serverOffline) {
+        try {
+          const { api } = await import('./lib/api');
+          await api.get('/health'); // O interceptor do api.js disparará 'server-online' se der certo
+        } catch (e) {
+          // Continua offline...
+        }
+      }
+    }, 10000);
+
     return () => {
       window.removeEventListener('server-offline', handleOffline);
       window.removeEventListener('server-online', handleOnline);
+      clearInterval(pinger);
     };
-  }, []);
+  }, [serverOffline]);
 
   const handleLogout = async () => {
     console.log("🟡 [APP] Iniciando processo de logout...");

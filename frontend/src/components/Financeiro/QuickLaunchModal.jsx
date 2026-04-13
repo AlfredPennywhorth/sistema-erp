@@ -21,7 +21,7 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
     tipo_evento: '',
     plano_contas_id: '',
     parceiro_id: '',
-    centro_custo: '',
+    centro_custo_id: '',
   });
 
   /* ===========================
@@ -38,7 +38,7 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
         tipo_evento: '',
         plano_contas_id: '',
         parceiro_id: '',
-        centro_custo: '',
+        centro_custo_id: '',
       });
 
       fetchData();
@@ -68,12 +68,20 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
     setLoading(true);
 
     try {
-      await api.post('/financeiro/', {
-        ...formData,
+      const payload = {
+        descricao: formData.descricao,
         valor_previsto: parseFloat(formData.valor_previsto),
+        data_vencimento: formData.data_vencimento,
+        natureza: formData.natureza,
+        tipo: formData.tipo,
+        tipo_evento: formData.tipo_evento || null,
+        plano_contas_id: formData.plano_contas_id || null,
         parceiro_id: formData.parceiro_id || null,
-        centro_custo: formData.centro_custo || null,
-      });
+        centro_custo_id: formData.centro_custo_id || null, // Corrigido
+        documento: formData.documento || null,
+      };
+
+      await api.post('/financeiro/', payload);
 
       if (onSuccess) onSuccess();
 
@@ -81,7 +89,26 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
       onClose();
 
     } catch (err) {
-      alert('Erro ao criar lançamento: ' + (err.response?.data?.detail || err.message));
+      console.error('ERRO COMPLETO DA API:', err);
+      
+      let errorMsg = 'Erro desconhecido ao salvar';
+      
+      if (err.response?.data) {
+        const detail = err.response.data.detail;
+        if (typeof detail === 'string') {
+          errorMsg = detail;
+        } else if (Array.isArray(detail)) {
+          errorMsg = detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join('\n');
+        } else if (typeof detail === 'object') {
+          errorMsg = JSON.stringify(detail, null, 2);
+        } else {
+          errorMsg = JSON.stringify(err.response.data, null, 2);
+        }
+      } else {
+        errorMsg = err.message;
+      }
+      
+      alert('Erro ao criar lançamento:\n\n' + errorMsg);
     } finally {
       setLoading(false);
     }

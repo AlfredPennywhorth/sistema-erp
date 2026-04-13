@@ -211,8 +211,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ─── TROCA DE EMPRESA (não coloca loading global) ─────────────────────────
-  const switchTenant = async (tenantId) => {
+  // ─── SELEÇÃO DE EMPRESA (ATIVAR TENANT) ───────────────────────────────────
+  const setActiveTenantFn = async (tenantId) => {
     if (!tenantId) { invalidateTenant(); return; }
     // Carrega o tenant escolhido sem spinner global
     try {
@@ -229,7 +229,7 @@ export const AuthProvider = ({ children }) => {
 
   const contextValue = useMemo(() => ({
     user, session, loading, activeTenant, userTenants,
-    setActiveTenant: switchTenant,
+    setActiveTenant: setActiveTenantFn,
     login, logout,
     isAuthenticated: !!user,
   }), [user, session, loading, activeTenant, userTenants]);

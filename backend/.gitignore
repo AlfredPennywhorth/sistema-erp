@@ -7,6 +7,8 @@
 *.db
 *.sqlite
 *.sqlite3
+**/__pycache__/
+**/*.pyc
 
 # Cache Python
 __pycache__/
@@ -17,13 +19,20 @@ __pycache__/
 *.egg-info/
 .eggs/
 
-# Logs
+# Logs e Temporários
 *.log
 *.txt
+scripts/logs/
+**/error.log
+**/backend.log
 
-# Arquivos de debug e scripts temporários
-debug_*.py
-check_*.py
-cleanup_*.py
-auto_fix_*.py
-apply_*.py
+# Máscaras de scripts de suporte (agora em scripts/)
+/debug_*.py
+/check_*.py
+/cleanup_*.py
+/auto_fix_*.py
+/apply_*.py
+/prova_*.py
+/test_*.py
+/seed_*.py
+/setup_*.py

@@ -644,7 +644,7 @@ def delete_conta_bancaria(
     if lancamentos_ativos > 0:
         raise HTTPException(
             status_code=400,
-            detail="Esta conta possui lançamentos financeiros vinculados e não pode ser inativada."
+            detail="Esta conta possui lançamentos financeiros ativos e não pode ser excluída. Reclassifique ou cancele os lançamentos antes de inativar."
         )
 
     dados_anteriores = conta.model_dump(mode='json')

@@ -44,10 +44,10 @@ class ContaBancariaBase(BaseModel):
     tipo_conta: TipoContaBancaria = TipoContaBancaria.CORRENTE
     saldo_inicial: Decimal = Field(default=0, max_digits=18, decimal_places=2)
     limite_credito: Decimal = Field(default=0, max_digits=18, decimal_places=2)
-    conta_contabil_id: UUID
+    conta_contabil_id: Optional[UUID] = None
 
 class ContaBancariaCreate(ContaBancariaBase):
-    pass
+    conta_contabil_id: UUID  # Required on creation per business rule
 
 class ContaBancariaUpdate(BaseModel):
     banco_id: Optional[UUID] = None

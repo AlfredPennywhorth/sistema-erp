@@ -142,6 +142,9 @@ def setup_tenant(
         
         print(f">>> [SETUP] Injetando Centros de Custo Básicos")
         SeederService.seed_centros_custo(session=session, empresa_id=empresa.id)
+
+        print(f">>> [SETUP] Injetando Formas de Pagamento Padrão")
+        SeederService.seed_formas_pagamento(session=session, empresa_id=empresa.id)
         
         # Commit Final da Transação
         session.commit()

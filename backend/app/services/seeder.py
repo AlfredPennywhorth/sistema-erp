@@ -2,8 +2,11 @@ import json
 import os
 from typing import Dict, Any, List
 from uuid import UUID
-from sqlmodel import Session
-from app.models.database import PlanoConta, TipoConta, NaturezaConta, CentroCusto
+from sqlmodel import Session, select
+from app.models.database import (
+    PlanoConta, TipoConta, NaturezaConta, CentroCusto, FormaPagamento,
+    TipoFormaPagamento, TipoOperacaoPagamento
+)
 
 class SeederService:
     @staticmethod
@@ -80,4 +83,104 @@ class SeederService:
             )
             session.add(cc)
         
+        session.flush()
+
+    @staticmethod
+    def seed_formas_pagamento(session: Session, empresa_id: UUID) -> None:
+        """
+        Cria as formas de pagamento padrão para o tenant.
+        Usa upsert por nome para não duplicar em re-execuções.
+        """
+        formas_padrao = [
+            {
+                "nome": "PIX",
+                "tipo": TipoFormaPagamento.PIX,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Transferência Bancária",
+                "tipo": TipoFormaPagamento.TRANSFERENCIA,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Boleto Bancário",
+                "tipo": TipoFormaPagamento.BOLETO,
+                "tipo_operacao": TipoOperacaoPagamento.COMPENSACAO_BOLETO,
+                "baixa_imediata": False,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 2,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Cartão de Débito",
+                "tipo": TipoFormaPagamento.CARTAO_DEBITO,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 1,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Cartão de Crédito",
+                "tipo": TipoFormaPagamento.CARTAO_CREDITO,
+                "tipo_operacao": TipoOperacaoPagamento.GERACAO_FATURA,
+                "baixa_imediata": False,
+                "gera_obrigacao_futura": True,
+                "prazo_liquidacao_dias": 30,
+                "taxa_padrao": 0,
+                "permite_parcelamento": True,
+                "max_parcelas": 12,
+            },
+            {
+                "nome": "Dinheiro",
+                "tipo": TipoFormaPagamento.DINHEIRO,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Cheque",
+                "tipo": TipoFormaPagamento.CHEQUE,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIFERIDA,
+                "baixa_imediata": False,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+        ]
+
+        for item in formas_padrao:
+            existente = session.exec(
+                select(FormaPagamento).where(
+                    FormaPagamento.empresa_id == empresa_id,
+                    FormaPagamento.nome == item["nome"]
+                )
+            ).first()
+
+            if not existente:
+                forma = FormaPagamento(empresa_id=empresa_id, **item)
+                session.add(forma)
+
         session.flush()

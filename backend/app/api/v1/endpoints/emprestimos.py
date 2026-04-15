@@ -49,6 +49,7 @@ def _calcular_parcelas_price(
 ) -> list[dict]:
     """Gera lista de parcelas pelo sistema Price (prestação fixa)."""
     if taxa == 0:
+        # Parcelas iguais sem juros (caso de taxa zero)
         pmt = valor / n
         parcelas = []
         for i in range(n):
@@ -72,16 +73,16 @@ def _calcular_parcelas_price(
         if i == n - 1:
             # Última parcela absorve diferenças de arredondamento
             amort = round(saldo, 2)
-            pmt_i = round(amort + juros, 2)
+            final_installment_amount = round(amort + juros, 2)
         else:
-            pmt_i = pmt
+            final_installment_amount = pmt
         saldo = round(saldo - amort, 2)
         venc = data_primeira + timedelta(days=periodicidade_dias * i)
         parcelas.append({
             "numero_parcela": i + 1,
             "valor_principal": amort,
             "valor_juros": juros,
-            "valor_total": pmt_i,
+            "valor_total": final_installment_amount,
             "data_vencimento": venc,
         })
     return parcelas
@@ -268,6 +269,7 @@ def create_emprestimo(
         data_vencimento_final=date.today(),  # placeholder
         usuario_criacao_id=user_id,
     )
+    # Calcular parcelas usando apenas os dados do payload, sem criar objeto persistido
     plano_parcelas = _gerar_parcelas(emprestimo_temp)
 
     data_vencimento_final = plano_parcelas[-1]["data_vencimento"]
@@ -292,7 +294,9 @@ def create_emprestimo(
         )
         session.add(parcela)
 
-    # 6. Creditar valor na conta bancária (entrada de caixa pela contratação)
+    # 6. Creditar valor na conta bancária: registra a entrada de caixa do
+    # empréstimo contratado. A contrapartida contábil (passivo) é representada
+    # por conta_contabil_passivo_id, gerenciada via saldo_devedor do Emprestimo.
     conta.saldo_atual += payload.valor_contratado
     session.add(conta)
 

@@ -302,7 +302,7 @@ const ModalNovoEmprestimo = ({ onClose, onSuccess }) => {
               <input type="number" required step="0.01" min="0.01" placeholder="0,00" value={form.valor_contratado} onChange={e => setForm({ ...form, valor_contratado: e.target.value })} className={inputCls} />
             </F>
             <F label="Taxa de Juros (% ao período) *">
-              <input type="number" required step="0.0001" min="0" placeholder="1.2 = 1,2%" value={form.taxa_juros} onChange={e => setForm({ ...form, taxa_juros: e.target.value })} className={inputCls} />
+              <input type="number" required step="0.0001" min="0" placeholder="Ex: 1.2 para 1,2%" value={form.taxa_juros} onChange={e => setForm({ ...form, taxa_juros: e.target.value })} className={inputCls} />
             </F>
           </div>
 
@@ -457,7 +457,7 @@ const EmprestimoCard = ({ emp, onPagarParcela }) => {
               <Percent size={10} /> Taxa
             </p>
             <p className="text-sm font-bold text-white">
-              {(parseFloat(emp.taxa_juros) * 100).toFixed(4)}% / {emp.periodicidade_dias === 30 ? 'mês' : `${emp.periodicidade_dias}d`}
+              {(parseFloat(emp.taxa_juros) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 4, minimumFractionDigits: 2 })}% / {emp.periodicidade_dias === 30 ? 'mês' : `${emp.periodicidade_dias}d`}
             </p>
           </div>
           <div className="text-center">

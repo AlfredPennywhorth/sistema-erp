@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 from app.models.database import (
     PlanoConta, TipoConta, NaturezaConta, CentroCusto, FormaPagamento,
-    TipoFormaPagamento, TipoOperacaoPagamento
+    BandeiraCartao, TipoFormaPagamento, TipoOperacaoPagamento
 )
 
 class SeederService:
@@ -182,5 +182,94 @@ class SeederService:
             if not existente:
                 forma = FormaPagamento(empresa_id=empresa_id, **item)
                 session.add(forma)
+
+        session.flush()
+
+    @staticmethod
+    def seed_bandeiras_cartao(session: Session, empresa_id: UUID) -> None:
+        """
+        Cria as bandeiras de cartão padrão para as formas de cartão de débito e crédito.
+        Taxas são aproximações de mercado brasileiro (2026). Upsert por forma+nome.
+        """
+        formas_cartao = session.exec(
+            select(FormaPagamento).where(
+                FormaPagamento.empresa_id == empresa_id,
+                FormaPagamento.tipo.in_([
+                    TipoFormaPagamento.CARTAO_CREDITO,
+                    TipoFormaPagamento.CARTAO_DEBITO
+                ])
+            )
+        ).all()
+
+        bandeiras_padrao = [
+            {
+                "nome": "Visa",
+                "taxa_debito": "1.25",
+                "taxa_credito_1x": "2.69",
+                "taxa_credito_2_6x": "3.09",
+                "taxa_credito_7_12x": "3.49",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "Mastercard",
+                "taxa_debito": "1.25",
+                "taxa_credito_1x": "2.69",
+                "taxa_credito_2_6x": "3.09",
+                "taxa_credito_7_12x": "3.49",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "Elo",
+                "taxa_debito": "1.35",
+                "taxa_credito_1x": "2.79",
+                "taxa_credito_2_6x": "3.19",
+                "taxa_credito_7_12x": "3.59",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "American Express",
+                "taxa_debito": "0.00",
+                "taxa_credito_1x": "3.09",
+                "taxa_credito_2_6x": "3.49",
+                "taxa_credito_7_12x": "3.89",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "Hipercard",
+                "taxa_debito": "1.40",
+                "taxa_credito_1x": "2.99",
+                "taxa_credito_2_6x": "3.39",
+                "taxa_credito_7_12x": "3.79",
+                "prazo_repasse_dias": 30,
+            },
+        ]
+
+        if not formas_cartao:
+            return
+
+        forma_ids = [str(f.id) for f in formas_cartao]
+
+        # Buscar todas as bandeiras existentes para as formas de cartão de uma só vez
+        bandeiras_existentes = session.exec(
+            select(BandeiraCartao).where(
+                BandeiraCartao.empresa_id == empresa_id,
+                BandeiraCartao.forma_pagamento_id.in_(forma_ids)
+            )
+        ).all()
+        chaves_existentes = {(str(b.forma_pagamento_id), b.nome) for b in bandeiras_existentes}
+
+        for forma in formas_cartao:
+            for item in bandeiras_padrao:
+                # American Express não tem modalidade débito
+                if forma.tipo == TipoFormaPagamento.CARTAO_DEBITO and item["nome"] == "American Express":
+                    continue
+
+                if (str(forma.id), item["nome"]) not in chaves_existentes:
+                    bandeira = BandeiraCartao(
+                        empresa_id=empresa_id,
+                        forma_pagamento_id=forma.id,
+                        **item
+                    )
+                    session.add(bandeira)
 
         session.flush()

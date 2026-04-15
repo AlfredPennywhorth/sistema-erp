@@ -21,6 +21,7 @@ from app.models.database import (
     PlanoConta,
     CentroCusto,
     FormaPagamento,
+    BandeiraCartao,
     FaturaCartao,
     TipoEventoContabil,
     TipoCentroCusto,
@@ -28,8 +29,8 @@ from app.models.database import (
     StatusFatura
 )
 from app.schemas.financeiro import (
-    ExtratoRead, 
-    ExtratoPaginatedRead, 
+    ExtratoRead,
+    ExtratoPaginatedRead,
     LancamentoUpdate,
     LancamentoCreate,
     PlanoContaRead,
@@ -43,7 +44,10 @@ from app.schemas.financeiro import (
     FormaPagamentoUpdate,
     FaturaCartaoRead,
     FaturaCartaoCreate,
-    PagarFaturaPayload
+    PagarFaturaPayload,
+    BandeiraCartaoRead,
+    BandeiraCartaoCreate,
+    BandeiraCartaoUpdate,
 )
 from app.core.auth import get_session, get_current_tenant_id, get_current_user_id
 
@@ -290,6 +294,7 @@ class LiquidacaoPayload(BaseModel):
     juros_multa: Optional[Decimal] = Decimal('0')
     desconto: Optional[Decimal] = Decimal('0')
     forma_pagamento_id: Optional[UUID] = None
+    bandeira_id: Optional[UUID] = None  # Para RECEBIMENTO_CARTAO: define taxa por bandeira
 
 @router.post("/{lancamento_id}/liquidar")
 def liquidar_lancamento(
@@ -314,6 +319,7 @@ def liquidar_lancamento(
     juros_multa = payload.juros_multa or Decimal('0')
     desconto = payload.desconto or Decimal('0')
     forma_pagamento_id = payload.forma_pagamento_id
+    bandeira_id = payload.bandeira_id
 
     # 1. Buscar a empresa e configurações de conformidade
     empresa = session.get(Empresa, tenant_id)
@@ -371,14 +377,32 @@ def liquidar_lancamento(
         ).first()
 
         if not fatura:
-            # Criar fatura automaticamente para o mês
-            ultimo_dia = calendar.monthrange(mes_ref.year, mes_ref.month)[1]
-            data_fechamento = mes_ref.replace(day=ultimo_dia)
-            # Vencimento: dia 10 do mês seguinte
-            if mes_ref.month == 12:
-                data_vencimento = date(mes_ref.year + 1, 1, 10)
+            # Usar dia_fechamento e dia_vencimento configurados na forma de pagamento
+            dia_fec = forma.dia_fechamento if forma and forma.dia_fechamento else None
+            dia_ven = forma.dia_vencimento if forma and forma.dia_vencimento else None
+
+            if dia_fec:
+                # Ajustar para não ultrapassar o último dia do mês
+                ultimo_dia_mes = calendar.monthrange(mes_ref.year, mes_ref.month)[1]
+                data_fechamento = mes_ref.replace(day=min(dia_fec, ultimo_dia_mes))
             else:
-                data_vencimento = date(mes_ref.year, mes_ref.month + 1, 10)
+                # Padrão: último dia do mês
+                ultimo_dia = calendar.monthrange(mes_ref.year, mes_ref.month)[1]
+                data_fechamento = mes_ref.replace(day=ultimo_dia)
+
+            if dia_ven:
+                # Vencimento no dia configurado do mês seguinte
+                if mes_ref.month == 12:
+                    data_vencimento = date(mes_ref.year + 1, 1, min(dia_ven, 31))
+                else:
+                    ultimo_dia_prox = calendar.monthrange(mes_ref.year, mes_ref.month + 1)[1]
+                    data_vencimento = date(mes_ref.year, mes_ref.month + 1, min(dia_ven, ultimo_dia_prox))
+            else:
+                # Padrão: dia 10 do mês seguinte
+                if mes_ref.month == 12:
+                    data_vencimento = date(mes_ref.year + 1, 1, 10)
+                else:
+                    data_vencimento = date(mes_ref.year, mes_ref.month + 1, 10)
 
             fatura = FaturaCartao(
                 empresa_id=tenant_id,
@@ -426,6 +450,47 @@ def liquidar_lancamento(
             "data_vencimento": str(fatura.data_vencimento),
             "valor_total_fatura": float(fatura.valor_total)
         }
+
+    elif tipo_operacao == TipoOperacaoPagamento.RECEBIMENTO_CARTAO:
+        # Cartão de crédito como RECEBIMENTO (POS/PDV):
+        # - Taxa da bandeira (ou taxa_padrao da forma) é descontada do valor recebido
+        # - O repasse efetivo pela operadora ocorre em prazo_liquidacao_dias
+        if lancamento.natureza != NaturezaFinanceira.RECEBER:
+            raise HTTPException(
+                status_code=400,
+                detail="RECEBIMENTO_CARTAO só pode ser usado para lançamentos de natureza RECEBER."
+            )
+
+        # Determinar taxa: bandeira específica tem prioridade sobre taxa_padrao da forma
+        taxa = Decimal(str(forma.taxa_padrao)) if forma else Decimal('0')
+        if bandeira_id:
+            bandeira = session.exec(
+                select(BandeiraCartao).where(
+                    BandeiraCartao.id == bandeira_id,
+                    BandeiraCartao.empresa_id == tenant_id,
+                    BandeiraCartao.is_active == True
+                )
+            ).first()
+            if bandeira:
+                taxa = Decimal(str(bandeira.taxa_credito_1x))
+
+        valor_taxa = (valor_pago * taxa / Decimal('100')).quantize(Decimal('0.01'))
+        valor_liquido_recebimento = valor_pago - valor_taxa
+
+        # Data de crédito = hoje + prazo_repasse_dias (usa prazo_liquidacao_dias da forma)
+        prazo_repasse = prazo_liquidacao_dias if prazo_liquidacao_dias > 0 else 30
+        data_repasse = data_pagamento + timedelta(days=prazo_repasse)
+
+        lancamento.status = StatusLancamento.CONCILIADO
+        lancamento.data_pagamento = data_repasse
+        lancamento.valor_pago = valor_liquido_recebimento
+        lancamento.juros_multa = Decimal('0')
+        lancamento.desconto = Decimal('0')
+        lancamento.forma_pagamento_id = forma_pagamento_id
+        lancamento.usuario_liquidacao_id = user_id
+        # Nota: saldo bancário é creditado quando o repasse for confirmado
+
+        session.add(lancamento)
 
     elif tipo_operacao == TipoOperacaoPagamento.COMPENSACAO_BOLETO:
         # Boleto: baixa com status CONCILIADO e data futura de compensação
@@ -1030,4 +1095,85 @@ def pagar_fatura_cartao(
         "lancamento_id": str(lancamento_fatura.id),
         "valor_pago": float(valor_pago)
     }
+
+# --- Bandeiras de Cartão ---
+
+@router.get("/bandeiras-cartao", response_model=List[BandeiraCartaoRead])
+def list_bandeiras_cartao(
+    forma_pagamento_id: Optional[UUID] = None,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    stmt = select(BandeiraCartao).where(
+        BandeiraCartao.empresa_id == tenant_id,
+        BandeiraCartao.is_active == True
+    )
+    if forma_pagamento_id:
+        stmt = stmt.where(BandeiraCartao.forma_pagamento_id == forma_pagamento_id)
+    stmt = stmt.order_by(BandeiraCartao.nome)
+    return session.exec(stmt).all()
+
+@router.post("/bandeiras-cartao", response_model=BandeiraCartaoRead, status_code=status.HTTP_201_CREATED)
+def create_bandeira_cartao(
+    bandeira: BandeiraCartaoCreate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    # Validar forma de pagamento
+    forma = session.exec(
+        select(FormaPagamento).where(
+            FormaPagamento.id == bandeira.forma_pagamento_id,
+            FormaPagamento.empresa_id == tenant_id
+        )
+    ).one_or_none()
+    if not forma:
+        raise HTTPException(status_code=404, detail="Forma de pagamento não encontrada.")
+
+    db_bandeira = BandeiraCartao(**bandeira.model_dump())
+    db_bandeira.empresa_id = tenant_id
+    session.add(db_bandeira)
+    session.commit()
+    session.refresh(db_bandeira)
+    return db_bandeira
+
+@router.put("/bandeiras-cartao/{bandeira_id}", response_model=BandeiraCartaoRead)
+def update_bandeira_cartao(
+    bandeira_id: UUID,
+    bandeira_update: BandeiraCartaoUpdate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    db_bandeira = session.exec(
+        select(BandeiraCartao).where(BandeiraCartao.id == bandeira_id, BandeiraCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not db_bandeira:
+        raise HTTPException(status_code=404, detail="Bandeira não encontrada.")
+
+    update_data = bandeira_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_bandeira, key, value)
+
+    session.add(db_bandeira)
+    session.commit()
+    session.refresh(db_bandeira)
+    return db_bandeira
+
+@router.delete("/bandeiras-cartao/{bandeira_id}")
+def delete_bandeira_cartao(
+    bandeira_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    db_bandeira = session.exec(
+        select(BandeiraCartao).where(BandeiraCartao.id == bandeira_id, BandeiraCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not db_bandeira:
+        raise HTTPException(status_code=404, detail="Bandeira não encontrada.")
+
+    # Soft-delete
+    db_bandeira.is_active = False
+    session.add(db_bandeira)
+    session.commit()
+    return {"message": "Bandeira desativada com sucesso."}
+
 

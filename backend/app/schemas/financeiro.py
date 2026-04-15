@@ -8,7 +8,6 @@ from app.models.database import (
     NaturezaFinanceira, TipoLancamento, StatusLancamento, TipoEventoContabil,
     TipoFormaPagamento, TipoOperacaoPagamento, StatusFatura
 )
-
 # Enums (replicados dos models para typing ou importados)
 class NaturezaConta(str, Enum):
     DEVEDORA = "DEVEDORA"
@@ -127,6 +126,8 @@ class FormaPagamentoBase(BaseModel):
     permite_parcelamento: bool = False
     max_parcelas: int = 1
     conta_transitoria_id: Optional[UUID] = None
+    dia_fechamento: Optional[int] = Field(None, ge=1, le=31)
+    dia_vencimento: Optional[int] = Field(None, ge=1, le=31)
 
 class FormaPagamentoCreate(FormaPagamentoBase):
     pass
@@ -143,6 +144,8 @@ class FormaPagamentoUpdate(BaseModel):
     permite_parcelamento: Optional[bool] = None
     max_parcelas: Optional[int] = None
     conta_transitoria_id: Optional[UUID] = None
+    dia_fechamento: Optional[int] = Field(None, ge=1, le=31)
+    dia_vencimento: Optional[int] = Field(None, ge=1, le=31)
 
 class FormaPagamentoRead(FormaPagamentoBase):
     id: UUID
@@ -174,6 +177,35 @@ class PagarFaturaPayload(BaseModel):
     conta_bancaria_id: UUID
     data_pagamento: date
     desconto: Optional[Decimal] = Decimal('0')
+
+# --- BandeiraCartao ---
+class BandeiraCartaoBase(BaseModel):
+    forma_pagamento_id: UUID
+    nome: str = Field(..., max_length=50)
+    taxa_debito: Decimal = Field(default=0, max_digits=6, decimal_places=4)
+    taxa_credito_1x: Decimal = Field(default=0, max_digits=6, decimal_places=4)
+    taxa_credito_2_6x: Decimal = Field(default=0, max_digits=6, decimal_places=4)
+    taxa_credito_7_12x: Decimal = Field(default=0, max_digits=6, decimal_places=4)
+    prazo_repasse_dias: int = 30
+    is_active: bool = True
+
+class BandeiraCartaoCreate(BandeiraCartaoBase):
+    pass
+
+class BandeiraCartaoUpdate(BaseModel):
+    nome: Optional[str] = Field(None, max_length=50)
+    taxa_debito: Optional[Decimal] = Field(None, max_digits=6, decimal_places=4)
+    taxa_credito_1x: Optional[Decimal] = Field(None, max_digits=6, decimal_places=4)
+    taxa_credito_2_6x: Optional[Decimal] = Field(None, max_digits=6, decimal_places=4)
+    taxa_credito_7_12x: Optional[Decimal] = Field(None, max_digits=6, decimal_places=4)
+    prazo_repasse_dias: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class BandeiraCartaoRead(BandeiraCartaoBase):
+    id: UUID
+    empresa_id: UUID
+    class Config:
+        from_attributes = True
 # --- Extrato ---
 class ExtratoRead(BaseModel):
     id: UUID

@@ -13,19 +13,30 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [contas, setContas] = useState([]);
   const [formasPagamento, setFormasPagamento] = useState([]);
+  const [bandeiras, setBandeiras] = useState([]);
   const [formData, setFormData] = useState({
     valor_pago: 0,
     juros_multa: 0,
     desconto: 0,
     data_pagamento: new Date().toISOString().split('T')[0],
     conta_bancaria_id: '',
-    forma_pagamento_id: ''
+    forma_pagamento_id: '',
+    bandeira_id: '',
   });
   const [error, setError] = useState(null);
   const [faturaInfo, setFaturaInfo] = useState(null);
 
   const formaSelecionada = formasPagamento.find(f => f.id === formData.forma_pagamento_id);
-  const isCartaoCredito = formaSelecionada?.tipo === 'CARTAO_CREDITO';
+  const isCartaoCreditoPagar = formaSelecionada?.tipo === 'CARTAO_CREDITO' && lancamento?.natureza === 'PAGAR';
+  const isCartaoCreditoReceber = formaSelecionada?.tipo === 'CARTAO_CREDITO' && lancamento?.natureza === 'RECEBER';
+  const ocultarContaBancaria = isCartaoCreditoPagar;
+
+  // Taxa da bandeira selecionada (para recebimento)
+  const bandeiraSelecionada = bandeiras.find(b => b.id === formData.bandeira_id);
+  const taxaBandeira = bandeiraSelecionada ? Number(bandeiraSelecionada.taxa_credito_1x || 0) : 0;
+  const valorBruto = parseFloat(formData.valor_pago) || 0;
+  const valorTaxa = isCartaoCreditoReceber ? (valorBruto * taxaBandeira / 100) : 0;
+  const valorLiquidoReceber = isCartaoCreditoReceber ? (valorBruto - valorTaxa) : null;
 
   const valorLiquido = () => {
     const pago = parseFloat(formData.valor_pago) || 0;
@@ -45,12 +56,24 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
           desconto: 0,
           data_pagamento: new Date().toISOString().split('T')[0],
           forma_pagamento_id: lancamento.forma_pagamento_id || '',
+          bandeira_id: '',
         }));
       }
       setError(null);
       setFaturaInfo(null);
     }
   }, [isOpen, lancamento]);
+
+  // Carregar bandeiras quando uma forma de cartão for selecionada
+  useEffect(() => {
+    if (formData.forma_pagamento_id && (isCartaoCreditoPagar || isCartaoCreditoReceber)) {
+      api.get('/financeiro/bandeiras-cartao', { params: { forma_pagamento_id: formData.forma_pagamento_id } })
+        .then(res => setBandeiras(res.data))
+        .catch(() => setBandeiras([]));
+    } else {
+      setBandeiras([]);
+    }
+  }, [formData.forma_pagamento_id, isCartaoCreditoPagar, isCartaoCreditoReceber]);
 
   const fetchDados = async () => {
     try {
@@ -80,10 +103,11 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
         desconto: parseFloat(formData.desconto) || 0,
         data_pagamento: formData.data_pagamento,
         forma_pagamento_id: formData.forma_pagamento_id || null,
+        bandeira_id: formData.bandeira_id || null,
       };
 
-      // Cartão de crédito não precisa de conta bancária
-      if (!isCartaoCredito) {
+      // Cartão de crédito PAGAR não precisa de conta bancária
+      if (!ocultarContaBancaria) {
         if (!formData.conta_bancaria_id) {
           setError('Selecione uma conta bancária.');
           setLoading(false);
@@ -96,7 +120,6 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
 
       if (response.data?.acao === 'vinculado_a_fatura') {
         setFaturaInfo(response.data);
-        // Não fechar ainda — mostrar confirmação
         setLoading(false);
         return;
       }
@@ -200,7 +223,7 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
             <select
               className="w-full h-12 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-brand-primary outline-none transition-all"
               value={formData.forma_pagamento_id}
-              onChange={(e) => setFormData({ ...formData, forma_pagamento_id: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, forma_pagamento_id: e.target.value, bandeira_id: '' })}
             >
               <option value="">— Não especificado —</option>
               {formasPagamento.map(f => (
@@ -209,8 +232,31 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
             </select>
           </div>
 
-          {/* Aviso Cartão de Crédito */}
-          {isCartaoCredito && (
+          {/* Bandeira do Cartão (aparece quando cartão selecionado) */}
+          {(isCartaoCreditoPagar || isCartaoCreditoReceber) && bandeiras.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <CreditCard size={12} />
+                Bandeira do Cartão
+              </label>
+              <select
+                className="w-full h-12 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl px-4 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-brand-primary outline-none transition-all"
+                value={formData.bandeira_id}
+                onChange={(e) => setFormData({ ...formData, bandeira_id: e.target.value })}
+              >
+                <option value="">— Selecionar bandeira (opcional) —</option>
+                {bandeiras.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.nome}
+                    {isCartaoCreditoReceber ? ` — Taxa crédito 1x: ${Number(b.taxa_credito_1x).toFixed(2)}%` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Aviso Cartão de Crédito PAGAR → fatura */}
+          {isCartaoCreditoPagar && (
             <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-start gap-3 text-blue-700 dark:text-blue-300">
               <Info size={18} className="shrink-0 mt-0.5" />
               <p className="text-xs font-bold leading-relaxed">
@@ -219,8 +265,25 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
             </div>
           )}
 
-          {/* Conta Bancária — ocultada para cartão de crédito */}
-          {!isCartaoCredito && (
+          {/* Aviso Cartão de Crédito RECEBER → taxa + prazo */}
+          {isCartaoCreditoReceber && (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start gap-3 text-emerald-700 dark:text-emerald-300">
+              <Info size={18} className="shrink-0 mt-0.5" />
+              <div className="text-xs font-bold leading-relaxed">
+                <p>Recebimento via cartão: a operadora retém a taxa administrativa e repassa o valor líquido em ~{formaSelecionada?.prazo_liquidacao_dias || 30} dias.</p>
+                {bandeiraSelecionada && (
+                  <p className="mt-1">
+                    Taxa ({bandeiraSelecionada.nome} crédito 1x): {Number(bandeiraSelecionada.taxa_credito_1x).toFixed(2)}% →
+                    {' '}Valor líquido estimado:{' '}
+                    <span className="text-emerald-600">R$ {(valorBruto - valorTaxa).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Conta Bancária — ocultada para cartão de crédito PAGAR */}
+          {!ocultarContaBancaria && (
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Landmark size={12} />
@@ -274,8 +337,8 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
             </div>
           </div>
 
-          {/* Juros/Multa e Desconto — apenas para não-cartão crédito */}
-          {!isCartaoCredito && (
+          {/* Juros/Multa e Desconto — apenas para não-cartão crédito PAGAR */}
+          {!isCartaoCreditoPagar && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -305,7 +368,7 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
           )}
 
           {/* Resumo do Valor Líquido */}
-          {!isCartaoCredito && (
+          {!isCartaoCreditoPagar && (
             <div className={`p-4 rounded-2xl border flex items-center justify-between ${
               isPagar
                 ? 'bg-red-500/5 border-red-500/20'
@@ -315,7 +378,10 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
               <span className={`text-xl font-black ${
                 isPagar ? 'text-red-500' : 'text-emerald-500'
               }`}>
-                R$ {valorLiquido().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {(isCartaoCreditoReceber && bandeiraSelecionada
+                  ? valorLiquidoReceber
+                  : valorLiquido()
+                ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
           )}
@@ -327,15 +393,15 @@ const LiquidacaoModal = ({ isOpen, onClose, lancamento, onSuccess }) => {
             </button>
             <button
               type="submit"
-              disabled={loading || (!isCartaoCredito && contas.length === 0)}
+              disabled={loading || (!ocultarContaBancaria && contas.length === 0)}
               className={`flex-[2] h-12 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
-                isCartaoCredito
+                isCartaoCreditoPagar
                   ? 'bg-blue-500 shadow-blue-500/20'
                   : isPagar
                     ? 'bg-red-500 shadow-red-500/20'
                     : 'bg-emerald-500 shadow-emerald-500/20'
               }`}>
-              {loading ? 'Processando...' : isCartaoCredito ? 'Vincular à Fatura' : `Confirmar ${isPagar ? 'Pagamento' : 'Recebimento'}`}
+              {loading ? 'Processando...' : isCartaoCreditoPagar ? 'Vincular à Fatura' : `Confirmar ${isPagar ? 'Pagamento' : 'Recebimento'}`}
             </button>
           </div>
         </form>

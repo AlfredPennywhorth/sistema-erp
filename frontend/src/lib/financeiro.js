@@ -88,7 +88,24 @@ export const FinanceiroAPI = {
     return data;
   },
 
-  // Faturas de Cartão
+  // Bandeiras de Cartão
+  getBandeirasCartao: async (formasPagamentoId) => {
+    const params = formasPagamentoId ? { forma_pagamento_id: formasPagamentoId } : {};
+    const { data } = await api.get('/financeiro/bandeiras-cartao', { params });
+    return data;
+  },
+  createBandeiraCartao: async (bandeiraData) => {
+    const { data } = await api.post('/financeiro/bandeiras-cartao', bandeiraData);
+    return data;
+  },
+  updateBandeiraCartao: async (id, bandeiraData) => {
+    const { data } = await api.put(`/financeiro/bandeiras-cartao/${id}`, bandeiraData);
+    return data;
+  },
+  deleteBandeiraCartao: async (id) => {
+    const { data } = await api.delete(`/financeiro/bandeiras-cartao/${id}`);
+    return data;
+  },
   getFaturasCartao: async (params = {}) => {
     const { data } = await api.get('/financeiro/faturas-cartao', { params });
     return data;

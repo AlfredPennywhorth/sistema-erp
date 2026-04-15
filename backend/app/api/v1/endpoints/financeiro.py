@@ -111,6 +111,16 @@ def estornar_pagamento(
     if lancamento.status != StatusLancamento.PAGO:
         raise HTTPException(status_code=400, detail="Apenas lançamentos pagos podem ser estornados")
 
+    # BUG 4 — Verificação de SoD no estorno
+    empresa = session.get(Empresa, tenant_id)
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada.")
+    if empresa.strict_compliance_sod and lancamento.usuario_liquidacao_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Políticas de Compliance: O estorno deve ser realizado por um usuário diferente do que efetuou a liquidação."
+        )
+
     # Guardar estado para auditoria
     dados_anteriores = lancamento.model_dump(mode='json')
 
@@ -118,11 +128,12 @@ def estornar_pagamento(
     if lancamento.conta_bancaria_id:
         conta = session.get(ContaBancaria, lancamento.conta_bancaria_id)
         if conta:
-            valor = lancamento.valor_pago or lancamento.valor_previsto
+            # BUG 1 — Usar o mesmo cálculo de valor_liquido da liquidação
+            valor_liquido = (lancamento.valor_pago or Decimal('0')) + (lancamento.juros_multa or Decimal('0')) - (lancamento.desconto or Decimal('0'))
             if lancamento.natureza == NaturezaFinanceira.RECEBER:
-                conta.saldo_atual -= valor
+                conta.saldo_atual -= valor_liquido
             else:
-                conta.saldo_atual += valor
+                conta.saldo_atual += valor_liquido
             session.add(conta)
 
     # Reverter status

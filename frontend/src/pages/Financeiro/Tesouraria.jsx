@@ -17,7 +17,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  XCircle
+  XCircle,
+  Plus,
+  PiggyBank,
+  Landmark,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -25,9 +28,22 @@ const Tesouraria = () => {
   const [loading, setLoading] = useState(true);
   const [extratoLoading, setExtratoLoading] = useState(false);
   const [contas, setContas] = useState([]);
+  const [bancos, setBancos] = useState([]);
   const [extrato, setExtrato] = useState([]);
   const [selectedContaId, setSelectedContaId] = useState(null);
   const [editingMovimentacao, setEditingMovimentacao] = useState(null);
+  const [showContaModal, setShowContaModal] = useState(false);
+  const [contaForm, setContaForm] = useState({
+    banco_id: '',
+    nome: '',
+    agencia: '',
+    conta: '',
+    tipo_conta: 'CORRENTE',
+    saldo_inicial: 0,
+    limite_credito: 0,
+    conta_contabil_id: '',
+  });
+  const [contaFormLoading, setContaFormLoading] = useState(false);
   const [planoContas, setPlanoContas] = useState([]);
   const [parceiros, setParceiros] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,6 +72,7 @@ const Tesouraria = () => {
 
   useEffect(() => {
     fetchData();
+    fetchBancos();
   }, []);
 
   // Reage a qualquer mudança nos filtros aplicados, conta selecionada, página ou tamanho de página.
@@ -105,6 +122,37 @@ const Tesouraria = () => {
       setParceiros(res.data || []);
     } catch (err) {
       console.error("Erro ao carregar parceiros:", err);
+    }
+  };
+
+  const fetchBancos = async () => {
+    try {
+      const res = await api.get('/financeiro/bancos');
+      setBancos(res.data || []);
+    } catch (err) {
+      console.error("Erro ao carregar bancos:", err);
+    }
+  };
+
+  const handleCreateConta = async (e) => {
+    e.preventDefault();
+    try {
+      setContaFormLoading(true);
+      await api.post('/financeiro/contas-bancarias', {
+        ...contaForm,
+        saldo_inicial: Number(contaForm.saldo_inicial),
+        limite_credito: Number(contaForm.limite_credito),
+      });
+      alert("Conta bancária cadastrada com sucesso!");
+      setShowContaModal(false);
+      setContaForm({ banco_id: '', nome: '', agencia: '', conta: '', tipo_conta: 'CORRENTE', saldo_inicial: 0, limite_credito: 0, conta_contabil_id: '' });
+      fetchData();
+    } catch (err) {
+      console.error("Erro ao criar conta:", err);
+      const msg = err.response?.data?.detail || "Erro ao cadastrar conta bancária.";
+      alert(`Falha: ${msg}`);
+    } finally {
+      setContaFormLoading(false);
     }
   };
 
@@ -316,10 +364,17 @@ const Tesouraria = () => {
   const getIcon = (tipo) => {
     switch (tipo) {
       case 'CORRENTE': return <Building2 className="text-orange-500" />;
-      case 'POUPANCA': return <TrendingUp className="text-blue-500" />;
-      case 'DINHEIRO': return <Wallet className="text-emerald-500" />;
-      default: return <CreditCard className="text-slate-500" />;
+      case 'POUPANCA': return <PiggyBank className="text-blue-500" />;
+      case 'INVESTIMENTO': return <TrendingUp className="text-violet-500" />;
+      case 'CREDITO': return <CreditCard className="text-rose-500" />;
+      case 'CAIXA_FISICO': return <Wallet className="text-emerald-500" />;
+      default: return <Landmark className="text-slate-500" />;
     }
+  };
+
+  const tipoBadgeLabel = (tipo) => {
+    const labels = { CORRENTE: 'Corrente', POUPANCA: 'Poupança', INVESTIMENTO: 'Investimento', CREDITO: 'Crédito', CAIXA_FISICO: 'Caixa Físico' };
+    return labels[tipo] || tipo;
   };
 
   return (
@@ -339,6 +394,13 @@ const Tesouraria = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowContaModal(true)}
+            className="px-6 py-2.5 bg-indigo-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+          >
+            <Plus size={18} />
+            Nova Conta
+          </button>
           <button 
             onClick={exportarCSV}
             className="px-6 py-2.5 bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
@@ -372,23 +434,35 @@ const Tesouraria = () => {
             )}
             <div className="flex items-center justify-between mb-6">
               <div className="p-3 bg-slate-100 dark:bg-white/5 rounded-2xl group-hover:scale-110 transition-transform">
-                {getIcon(conta.tipo)}
+                {getIcon(conta.tipo_conta)}
               </div>
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-2 py-1 rounded-md">
-                {conta.tipo}
+                {tipoBadgeLabel(conta.tipo_conta)}
               </span>
             </div>
             <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{conta.nome}</p>
             <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">
               R$ {Number(conta.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </h3>
+            {Number(conta.limite_credito) > 0 && (
+              <p className="text-xs text-slate-400 mt-1">
+                Disponível (c/ limite): <span className="font-black text-emerald-500">R$ {Number(conta.saldo_disponivel).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </p>
+            )}
             
-            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-[11px] font-bold">
-               <span className="text-slate-400">Ag: {conta.agencia} | Cc: {conta.conta}</span>
-               <span className="text-emerald-500 flex items-center gap-1">
-                 <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-                 Atualizado
-               </span>
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/5 flex flex-col gap-1 text-[11px] font-bold">
+               <div className="flex items-center justify-between">
+                 <span className="text-slate-400">Ag: {conta.agencia} | Cc: {conta.conta}</span>
+                 <span className="text-emerald-500 flex items-center gap-1">
+                   <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+                   Atualizado
+                 </span>
+               </div>
+               {conta.conta_contabil_nome && (
+                 <p className="text-[10px] text-slate-400 truncate" title={conta.conta_contabil_nome}>
+                   Contábil: <span className="text-slate-600 dark:text-slate-300">{conta.conta_contabil_nome}</span>
+                 </p>
+               )}
             </div>
           </div>
         ))}
@@ -712,6 +786,148 @@ const Tesouraria = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal Nova Conta Bancária */}
+      {showContaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-white/10 animate-in zoom-in-95 duration-300">
+            <div className="px-8 py-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02]">
+              <h2 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                <Plus size={20} className="text-indigo-500" />
+                Nova Conta Bancária
+              </h2>
+              <button 
+                onClick={() => setShowContaModal(false)}
+                className="p-2 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full text-slate-400 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateConta} className="p-8 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Banco</label>
+                  <select 
+                    value={contaForm.banco_id}
+                    onChange={e => setContaForm({...contaForm, banco_id: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="" disabled>Selecione um banco...</option>
+                    {bancos.map(b => (
+                      <option key={b.id} value={b.id}>{b.codigo_bacen} – {b.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome / Apelido</label>
+                  <input 
+                    type="text"
+                    placeholder="Ex: Bradesco PJ"
+                    value={contaForm.nome}
+                    onChange={e => setContaForm({...contaForm, nome: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Agência</label>
+                  <input 
+                    type="text"
+                    value={contaForm.agencia}
+                    onChange={e => setContaForm({...contaForm, agencia: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número da Conta</label>
+                  <input 
+                    type="text"
+                    value={contaForm.conta}
+                    onChange={e => setContaForm({...contaForm, conta: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Conta</label>
+                  <select 
+                    value={contaForm.tipo_conta}
+                    onChange={e => setContaForm({...contaForm, tipo_conta: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="CORRENTE">Corrente</option>
+                    <option value="POUPANCA">Poupança</option>
+                    <option value="INVESTIMENTO">Investimento</option>
+                    <option value="CREDITO">Crédito</option>
+                    <option value="CAIXA_FISICO">Caixa Físico</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Saldo Inicial (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={contaForm.saldo_inicial}
+                    onChange={e => setContaForm({...contaForm, saldo_inicial: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Limite de Crédito (R$)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    value={contaForm.limite_credito}
+                    onChange={e => setContaForm({...contaForm, limite_credito: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Conta Contábil (Plano de Contas)</label>
+                  <select 
+                    value={contaForm.conta_contabil_id}
+                    onChange={e => setContaForm({...contaForm, conta_contabil_id: e.target.value})}
+                    className="w-full mt-1 px-4 py-3 bg-slate-100 dark:bg-white/5 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl text-sm font-bold transition-all outline-none appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="" disabled>Selecione a conta contábil...</option>
+                    {planoContas.filter(p => p.is_analitica).map(p => (
+                      <option key={p.id} value={p.id}>{p.codigo_estruturado} – {p.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowContaModal(false)}
+                  className="flex-1 px-6 py-3 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={contaFormLoading}
+                  className="flex-1 px-6 py-3 bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {contaFormLoading ? 'Salvando...' : 'Cadastrar Conta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Edição */}
       {editingMovimentacao && (

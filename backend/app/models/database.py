@@ -120,6 +120,13 @@ class NaturezaFinanceira(str, Enum):
     PAGAR = "PAGAR"
     RECEBER = "RECEBER"
 
+class TipoContaBancaria(str, Enum):
+    CORRENTE = "CORRENTE"
+    POUPANCA = "POUPANCA"
+    INVESTIMENTO = "INVESTIMENTO"
+    CREDITO = "CREDITO"
+    CAIXA_FISICO = "CAIXA_FISICO"
+
 class TipoEventoContabil(str, Enum):
     COMPRA_PRAZO = "COMPRA_PRAZO"
     COMPRA_AVISTA = "COMPRA_AVISTA"
@@ -215,8 +222,12 @@ class ContaBancaria(FullAuditMixin, table=True):
     nome: str = Field(max_length=100) # Ex: Bradesco PJ
     agencia: str = Field(max_length=20)
     conta: str = Field(max_length=20)
+    tipo_conta: TipoContaBancaria = Field(default=TipoContaBancaria.CORRENTE)
     saldo_inicial: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
     saldo_atual: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    limite_credito: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    conta_contabil_id: Optional[UUID] = Field(default=None, foreign_key="plano_contas.id")
+    ativo: bool = Field(default=True)
     
 class CentroCusto(FullAuditMixin, table=True):
     __tablename__ = "centros_custo"

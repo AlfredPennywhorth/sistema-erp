@@ -35,7 +35,10 @@ from app.schemas.financeiro import (
     CentroCustoCreate,
     CentroCustoUpdate,
     FormaPagamentoRead,
-    FormaPagamentoCreate
+    FormaPagamentoCreate,
+    ContaBancariaCreate,
+    ContaBancariaUpdate,
+    ContaBancariaRead,
 )
 from app.core.auth import get_session, get_current_tenant_id, get_current_user_id
 
@@ -329,6 +332,15 @@ def liquidar_lancamento(
     # Valor líquido considerando juros/multa e desconto
     valor_liquido = valor_pago + juros_multa - desconto
 
+    # Validação de saldo disponível (saldo real + limite de crédito)
+    if lancamento.natureza == NaturezaFinanceira.PAGAR:
+        saldo_disponivel = conta.saldo_atual + conta.limite_credito
+        if valor_liquido > saldo_disponivel:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Saldo insuficiente. Disponível (incluindo limite de crédito): R$ {float(saldo_disponivel):.2f}"
+            )
+
     if lancamento.natureza == NaturezaFinanceira.RECEBER:
         conta.saldo_atual += valor_liquido
     else:
@@ -465,12 +477,193 @@ def get_extrato(
         "pages": max(1, (total + size - 1) // size)
     }
 
-@router.get("/contas-bancarias", response_model=List[ContaBancaria])
+def _build_conta_read(conta: ContaBancaria, session: Session) -> ContaBancariaRead:
+    """Helper that assembles ContaBancariaRead with computed fields."""
+    saldo_disponivel = conta.saldo_atual + conta.limite_credito
+    conta_contabil_nome: Optional[str] = None
+    if conta.conta_contabil_id:
+        plano = session.get(PlanoConta, conta.conta_contabil_id)
+        if plano:
+            conta_contabil_nome = plano.nome
+    return ContaBancariaRead(
+        id=conta.id,
+        empresa_id=conta.empresa_id,
+        banco_id=conta.banco_id,
+        nome=conta.nome,
+        agencia=conta.agencia,
+        conta=conta.conta,
+        tipo_conta=conta.tipo_conta,
+        saldo_inicial=conta.saldo_inicial,
+        saldo_atual=conta.saldo_atual,
+        limite_credito=conta.limite_credito,
+        conta_contabil_id=conta.conta_contabil_id,
+        saldo_disponivel=saldo_disponivel,
+        conta_contabil_nome=conta_contabil_nome,
+        ativo=conta.ativo,
+        criado_em=conta.criado_em,
+    )
+
+@router.get("/contas-bancarias", response_model=List[ContaBancariaRead])
 def list_contas_bancarias(
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session)
 ):
-    return session.exec(select(ContaBancaria).where(ContaBancaria.empresa_id == tenant_id)).all()
+    contas = session.exec(
+        select(ContaBancaria).where(
+            ContaBancaria.empresa_id == tenant_id,
+            ContaBancaria.ativo == True
+        )
+    ).all()
+    return [_build_conta_read(c, session) for c in contas]
+
+@router.post("/contas-bancarias", response_model=ContaBancariaRead, status_code=status.HTTP_201_CREATED)
+def create_conta_bancaria(
+    payload: ContaBancariaCreate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user_id: UUID = Depends(get_current_user_id),
+    session: Session = Depends(get_session)
+):
+    # Validar conta contábil na mesma empresa
+    plano = session.exec(
+        select(PlanoConta).where(
+            PlanoConta.id == payload.conta_contabil_id,
+            PlanoConta.empresa_id == tenant_id
+        )
+    ).first()
+    if not plano:
+        raise HTTPException(status_code=400, detail="Conta contábil não encontrada para esta empresa.")
+
+    # Verificar duplicidade agencia+conta+banco dentro da empresa
+    existente = session.exec(
+        select(ContaBancaria).where(
+            ContaBancaria.empresa_id == tenant_id,
+            ContaBancaria.banco_id == payload.banco_id,
+            ContaBancaria.agencia == payload.agencia,
+            ContaBancaria.conta == payload.conta,
+            ContaBancaria.ativo == True
+        )
+    ).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Já existe uma conta ativa com este banco, agência e número de conta.")
+
+    nova_conta = ContaBancaria(
+        **payload.model_dump(),
+        empresa_id=tenant_id,
+        saldo_atual=payload.saldo_inicial,
+    )
+    session.add(nova_conta)
+    session.commit()
+    session.refresh(nova_conta)
+
+    log = LogAuditoria(
+        empresa_id=tenant_id,
+        usuario_id=user_id,
+        acao="CREATE",
+        tabela_afetada="contas_bancarias",
+        registro_id=nova_conta.id,
+        dados_novos=nova_conta.model_dump(mode='json'),
+    )
+    session.add(log)
+    session.commit()
+
+    return _build_conta_read(nova_conta, session)
+
+@router.put("/contas-bancarias/{conta_id}", response_model=ContaBancariaRead)
+def update_conta_bancaria(
+    conta_id: UUID,
+    payload: ContaBancariaUpdate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user_id: UUID = Depends(get_current_user_id),
+    session: Session = Depends(get_session)
+):
+    conta = session.exec(
+        select(ContaBancaria).where(
+            ContaBancaria.id == conta_id,
+            ContaBancaria.empresa_id == tenant_id
+        )
+    ).first()
+    if not conta:
+        raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
+
+    if payload.conta_contabil_id is not None:
+        plano = session.exec(
+            select(PlanoConta).where(
+                PlanoConta.id == payload.conta_contabil_id,
+                PlanoConta.empresa_id == tenant_id
+            )
+        ).first()
+        if not plano:
+            raise HTTPException(status_code=400, detail="Conta contábil não encontrada para esta empresa.")
+
+    dados_anteriores = conta.model_dump(mode='json')
+    update_data = payload.model_dump(exclude_unset=True)
+    # saldo_atual is managed by the system; never allow direct update via this endpoint
+    update_data.pop("saldo_atual", None)
+    for key, value in update_data.items():
+        setattr(conta, key, value)
+
+    session.add(conta)
+
+    log = LogAuditoria(
+        empresa_id=tenant_id,
+        usuario_id=user_id,
+        acao="UPDATE",
+        tabela_afetada="contas_bancarias",
+        registro_id=conta.id,
+        dados_anteriores=dados_anteriores,
+        dados_novos=conta.model_dump(mode='json'),
+    )
+    session.add(log)
+    session.commit()
+    session.refresh(conta)
+
+    return _build_conta_read(conta, session)
+
+@router.delete("/contas-bancarias/{conta_id}")
+def delete_conta_bancaria(
+    conta_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user_id: UUID = Depends(get_current_user_id),
+    session: Session = Depends(get_session)
+):
+    conta = session.exec(
+        select(ContaBancaria).where(
+            ContaBancaria.id == conta_id,
+            ContaBancaria.empresa_id == tenant_id
+        )
+    ).first()
+    if not conta:
+        raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
+
+    lancamentos_ativos = session.exec(
+        select(func.count(LancamentoFinanceiro.id)).where(
+            LancamentoFinanceiro.conta_bancaria_id == conta_id,
+            LancamentoFinanceiro.status != StatusLancamento.CANCELADO
+        )
+    ).one()
+    if lancamentos_ativos > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta conta possui lançamentos financeiros vinculados e não pode ser inativada."
+        )
+
+    dados_anteriores = conta.model_dump(mode='json')
+    conta.ativo = False
+    session.add(conta)
+
+    log = LogAuditoria(
+        empresa_id=tenant_id,
+        usuario_id=user_id,
+        acao="INATIVAR",
+        tabela_afetada="contas_bancarias",
+        registro_id=conta.id,
+        dados_anteriores=dados_anteriores,
+        dados_novos=conta.model_dump(mode='json'),
+    )
+    session.add(log)
+    session.commit()
+
+    return {"message": "Conta bancária inativada com sucesso."}
 
 @router.get("/bancos", response_model=List[Banco])
 def list_bancos(session: Session = Depends(get_session)):

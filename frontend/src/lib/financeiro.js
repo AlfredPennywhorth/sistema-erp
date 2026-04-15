@@ -78,5 +78,35 @@ export const FinanceiroAPI = {
   createFormaPagamento: async (formaData) => {
     const { data } = await api.post('/financeiro/formas-pagamento', formaData);
     return data;
-  }
+  },
+  updateFormaPagamento: async (id, formaData) => {
+    const { data } = await api.put(`/financeiro/formas-pagamento/${id}`, formaData);
+    return data;
+  },
+  deleteFormaPagamento: async (id) => {
+    const { data } = await api.delete(`/financeiro/formas-pagamento/${id}`);
+    return data;
+  },
+
+  // Faturas de Cartão
+  getFaturasCartao: async (params = {}) => {
+    const { data } = await api.get('/financeiro/faturas-cartao', { params });
+    return data;
+  },
+  getFaturaCartao: async (id) => {
+    const { data } = await api.get(`/financeiro/faturas-cartao/${id}`);
+    return data;
+  },
+  getLancamentosFatura: async (faturaId) => {
+    const { data } = await api.get(`/financeiro/faturas-cartao/${faturaId}/lancamentos`);
+    return data;
+  },
+  createFaturaCartao: async (faturaData) => {
+    const { data } = await api.post('/financeiro/faturas-cartao', faturaData);
+    return data;
+  },
+  pagarFaturaCartao: async (faturaId, payload) => {
+    const { data } = await api.post(`/financeiro/faturas-cartao/${faturaId}/pagar`, payload);
+    return data;
+  },
 };

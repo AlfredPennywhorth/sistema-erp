@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlmodel import Session, select, func
 from pydantic import BaseModel
 from uuid import UUID
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from decimal import Decimal
+import calendar
 
 from app.models.database import (
     Parceiro,
@@ -306,7 +307,6 @@ def liquidar_lancamento(
     - COMPENSACAO_BOLETO: baixa com status CONCILIADO e prazo de compensação
     - LIQUIDACAO_DIFERIDA: baixa com data diferida (cheque pré-datado)
     """
-    from datetime import timedelta
 
     valor_pago = payload.valor_pago
     data_pagamento = payload.data_pagamento
@@ -372,7 +372,6 @@ def liquidar_lancamento(
 
         if not fatura:
             # Criar fatura automaticamente para o mês
-            import calendar
             ultimo_dia = calendar.monthrange(mes_ref.year, mes_ref.month)[1]
             data_fechamento = mes_ref.replace(day=ultimo_dia)
             # Vencimento: dia 10 do mês seguinte
@@ -966,18 +965,21 @@ def pagar_fatura_cartao(
     plano_contas_id = forma.conta_transitoria_id if forma else None
 
     if not plano_contas_id:
-        # Fallback: usar primeira conta de passivo/despesa disponível para o tenant
+        # Fallback: buscar primeira conta analítica de passivo ou despesa para o tenant.
+        # Para garantir a contabilidade correta, configure conta_transitoria_id na forma de pagamento.
+        from app.models.database import TipoConta as TC
         plano_fallback = session.exec(
             select(PlanoConta).where(
                 PlanoConta.empresa_id == tenant_id,
                 PlanoConta.is_analitica == True,
-                PlanoConta.ativo == True
+                PlanoConta.ativo == True,
+                PlanoConta.tipo.in_([TC.PASSIVO, TC.DESPESA])
             )
         ).first()
         if not plano_fallback:
             raise HTTPException(
                 status_code=400,
-                detail="Configure uma conta contábil transitória na forma de pagamento para pagar faturas."
+                detail="Configure uma conta contábil transitória (passivo/despesa) na forma de pagamento do cartão para registrar o pagamento da fatura corretamente."
             )
         plano_contas_id = plano_fallback.id
 

@@ -246,6 +246,46 @@ def criar_aplicacao(
     return aplicacao
 
 
+# ---------------------------------------------------------------------------
+# Dashboard de Aplicações
+# (deve ficar antes das rotas /{aplicacao_id} para evitar conflito de rota)
+# ---------------------------------------------------------------------------
+
+@router.get("/dashboard/resumo")
+def dashboard_aplicacoes(
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session),
+):
+    """Retorna resumo consolidado das aplicações financeiras."""
+    stmt_total = select(
+        func.sum(AplicacaoFinanceira.saldo_atual),
+        func.sum(AplicacaoFinanceira.valor_aplicado),
+        func.sum(AplicacaoFinanceira.rendimento_total),
+        func.count(AplicacaoFinanceira.id),
+    ).where(
+        AplicacaoFinanceira.empresa_id == tenant_id,
+        AplicacaoFinanceira.status == StatusAplicacaoFinanceira.ATIVA,
+    )
+    row = session.exec(stmt_total).one()
+
+    saldo_total = row[0] or Decimal("0")
+    valor_aplicado_total = row[1] or Decimal("0")
+    rendimento_total = row[2] or Decimal("0")
+    qtd_ativas = row[3] or 0
+
+    return {
+        "saldo_total_aplicacoes": saldo_total,
+        "valor_aplicado_total": valor_aplicado_total,
+        "rendimento_total_acumulado": rendimento_total,
+        "quantidade_ativas": qtd_ativas,
+        "rentabilidade_percentual": (
+            (rendimento_total / valor_aplicado_total * 100).quantize(Decimal("0.0001"))
+            if valor_aplicado_total > 0
+            else Decimal("0")
+        ),
+    }
+
+
 @router.get("/{aplicacao_id}", response_model=AplicacaoFinanceiraRead)
 def get_aplicacao(
     aplicacao_id: UUID,
@@ -527,42 +567,3 @@ def resgatar_aplicacao(
     session.commit()
 
     return resgate
-
-
-# ---------------------------------------------------------------------------
-# Dashboard de Aplicações
-# ---------------------------------------------------------------------------
-
-@router.get("/dashboard/resumo")
-def dashboard_aplicacoes(
-    tenant_id: UUID = Depends(get_current_tenant_id),
-    session: Session = Depends(get_session),
-):
-    """Retorna resumo consolidado das aplicações financeiras."""
-    stmt_total = select(
-        func.sum(AplicacaoFinanceira.saldo_atual),
-        func.sum(AplicacaoFinanceira.valor_aplicado),
-        func.sum(AplicacaoFinanceira.rendimento_total),
-        func.count(AplicacaoFinanceira.id),
-    ).where(
-        AplicacaoFinanceira.empresa_id == tenant_id,
-        AplicacaoFinanceira.status == StatusAplicacaoFinanceira.ATIVA,
-    )
-    row = session.exec(stmt_total).one()
-
-    saldo_total = row[0] or Decimal("0")
-    valor_aplicado_total = row[1] or Decimal("0")
-    rendimento_total = row[2] or Decimal("0")
-    qtd_ativas = row[3] or 0
-
-    return {
-        "saldo_total_aplicacoes": saldo_total,
-        "valor_aplicado_total": valor_aplicado_total,
-        "rendimento_total_acumulado": rendimento_total,
-        "quantidade_ativas": qtd_ativas,
-        "rentabilidade_percentual": (
-            (rendimento_total / valor_aplicado_total * 100).quantize(Decimal("0.0001"))
-            if valor_aplicado_total > 0
-            else Decimal("0")
-        ),
-    }

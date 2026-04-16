@@ -15,6 +15,7 @@ import ContasReceber from './pages/Financeiro/ContasReceber';
 import Tesouraria from './pages/Financeiro/Tesouraria';
 import PlanoContas from './pages/Financeiro/PlanoContas';
 import RegrasContabeis from './pages/Financeiro/RegrasContabeis';
+import AplicacoesFinanceiras from './pages/Financeiro/AplicacoesFinanceiras';
 import Sidebar from './components/Layout/Sidebar';
 import QuickLaunchModal from './components/Financeiro/QuickLaunchModal';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -286,6 +287,11 @@ function AppContent() {
             <Route path="/financeiro/regras-contabeis" element={
               <ProtectedRoute>
                 <RegrasContabeis />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro/aplicacoes" element={
+              <ProtectedRoute>
+                <AplicacoesFinanceiras />
               </ProtectedRoute>
             } />
 

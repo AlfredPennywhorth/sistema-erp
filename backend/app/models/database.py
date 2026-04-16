@@ -54,10 +54,10 @@ class TenantMixin(SQLModel):
 
 class AuditMixin(SQLModel):
     """Campos de auditoria padrão"""
-    criado_em: datetime = Field(default_factory=lambda: datetime.now())
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     atualizado_em: datetime = Field(
-        default_factory=lambda: datetime.now(), 
-        sa_column_kwargs={"onupdate": lambda: datetime.now()}
+        default_factory=lambda: datetime.now(timezone.utc), 
+        sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)}
     )
 
 class FullAuditMixin(TenantMixin, AuditMixin):
@@ -148,8 +148,8 @@ class User(SQLModel, table=True):
     nome: Optional[str] = Field(default=None)
     avatar_url: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
-    criado_em: datetime = Field(default_factory=lambda: datetime.now())
-    atualizado_em: datetime = Field(default_factory=lambda: datetime.now())
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class SegmentoMercado(SQLModel, table=True):
     __tablename__ = "segmentos_mercado"
@@ -303,7 +303,7 @@ class TrilhaAuditoriaContador(SQLModel, table=True):
     empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
     acao: str = Field(max_length=100)
     detalhes: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now())
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Representante(FullAuditMixin, table=True):
     __tablename__ = "representantes"

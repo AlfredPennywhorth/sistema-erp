@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlmodel import Session, select, func
 from pydantic import BaseModel
 from uuid import UUID
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from decimal import Decimal
+import calendar
 
 from app.models.database import (
     Parceiro,
@@ -20,12 +21,16 @@ from app.models.database import (
     PlanoConta,
     CentroCusto,
     FormaPagamento,
+    BandeiraCartao,
+    FaturaCartao,
     TipoEventoContabil,
-    TipoCentroCusto
+    TipoCentroCusto,
+    TipoOperacaoPagamento,
+    StatusFatura
 )
 from app.schemas.financeiro import (
-    ExtratoRead, 
-    ExtratoPaginatedRead, 
+    ExtratoRead,
+    ExtratoPaginatedRead,
     LancamentoUpdate,
     LancamentoCreate,
     PlanoContaRead,
@@ -36,6 +41,13 @@ from app.schemas.financeiro import (
     CentroCustoUpdate,
     FormaPagamentoRead,
     FormaPagamentoCreate,
+    FormaPagamentoUpdate,
+    FaturaCartaoRead,
+    FaturaCartaoCreate,
+    PagarFaturaPayload,
+    BandeiraCartaoRead,
+    BandeiraCartaoCreate,
+    BandeiraCartaoUpdate,
     ContaBancariaCreate,
     ContaBancariaUpdate,
     ContaBancariaRead,
@@ -292,9 +304,11 @@ def create_lancamento(
 class LiquidacaoPayload(BaseModel):
     valor_pago: Decimal
     data_pagamento: date
-    conta_bancaria_id: UUID
+    conta_bancaria_id: Optional[UUID] = None
     juros_multa: Optional[Decimal] = Decimal('0')
     desconto: Optional[Decimal] = Decimal('0')
+    forma_pagamento_id: Optional[UUID] = None
+    bandeira_id: Optional[UUID] = None  # Para RECEBIMENTO_CARTAO: define taxa por bandeira
 
 @router.post("/{lancamento_id}/liquidar")
 def liquidar_lancamento(
@@ -304,14 +318,23 @@ def liquidar_lancamento(
     user_id: UUID = Depends(get_current_user_id),
     session: Session = Depends(get_session)
 ):
+    """
+    Realiza a baixa (liquidação) de um título financeiro com validação de SoD.
+    O comportamento varia conforme a forma de pagamento:
+    - LIQUIDACAO_DIRETA: débito/crédito imediato na conta bancária (padrão)
+    - GERACAO_FATURA: vincula à fatura do cartão, sem mexer no saldo bancário
+    - COMPENSACAO_BOLETO: baixa com status CONCILIADO e prazo de compensação
+    - LIQUIDACAO_DIFERIDA: baixa com data diferida (cheque pré-datado)
+    """
+
     valor_pago = payload.valor_pago
     data_pagamento = payload.data_pagamento
     conta_bancaria_id = payload.conta_bancaria_id
     juros_multa = payload.juros_multa or Decimal('0')
     desconto = payload.desconto or Decimal('0')
-    """
-    Realiza a baixa (liquidação) de um título financeiro com validação de SoD.
-    """
+    forma_pagamento_id = payload.forma_pagamento_id
+    bandeira_id = payload.bandeira_id
+
     # 1. Buscar a empresa e configurações de conformidade
     empresa = session.get(Empresa, tenant_id)
     if not empresa:
@@ -321,7 +344,7 @@ def liquidar_lancamento(
     lancamento = session.get(LancamentoFinanceiro, lancamento_id)
     if not lancamento or lancamento.empresa_id != tenant_id:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
-    
+
     if lancamento.status == StatusLancamento.PAGO:
         raise HTTPException(status_code=400, detail="Este lançamento já está pago.")
 
@@ -332,44 +355,225 @@ def liquidar_lancamento(
             detail="Políticas de Compliance: A aprovação do pagamento deve ser feita por um usuário diferente do criador."
         )
 
+    # 4. Resolver forma de pagamento e tipo de operação
+    tipo_operacao = TipoOperacaoPagamento.LIQUIDACAO_DIRETA
+    prazo_liquidacao_dias = 0
+    forma = None
+
+    if forma_pagamento_id:
+        forma = session.exec(
+            select(FormaPagamento).where(
+                FormaPagamento.id == forma_pagamento_id,
+                FormaPagamento.empresa_id == tenant_id,
+                FormaPagamento.is_active == True
+            )
+        ).first()
+        if not forma:
+            raise HTTPException(status_code=404, detail="Forma de pagamento não encontrada.")
+        tipo_operacao = forma.tipo_operacao
+        prazo_liquidacao_dias = forma.prazo_liquidacao_dias or 0
+
     # 5. Salvar estado anterior para auditoria
     dados_anteriores = lancamento.model_dump(mode='json')
-    
-    # 6. Atualizar Saldo Bancário (Atomicidade)
-    conta = session.get(ContaBancaria, conta_bancaria_id)
-    if not conta or conta.empresa_id != tenant_id:
-        raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
-    
-    # Valor líquido considerando juros/multa e desconto
-    valor_liquido = valor_pago + juros_multa - desconto
 
-    # Validação de saldo disponível (saldo real + limite de crédito)
-    if lancamento.natureza == NaturezaFinanceira.PAGAR:
-        saldo_disponivel = conta.saldo_atual + conta.limite_credito
-        if valor_liquido > saldo_disponivel:
+    # 6. Processar conforme tipo de operação
+    if tipo_operacao == TipoOperacaoPagamento.GERACAO_FATURA:
+        # CARTÃO DE CRÉDITO: NÃO debitar conta bancária agora.
+        # Vincular à fatura do mês corrente.
+        mes_ref = data_pagamento.replace(day=1)
+        fatura = session.exec(
+            select(FaturaCartao).where(
+                FaturaCartao.empresa_id == tenant_id,
+                FaturaCartao.forma_pagamento_id == forma_pagamento_id,
+                FaturaCartao.mes_referencia == mes_ref,
+                FaturaCartao.status == StatusFatura.ABERTA
+            )
+        ).first()
+
+        if not fatura:
+            # Usar dia_fechamento e dia_vencimento configurados na forma de pagamento
+            dia_fec = forma.dia_fechamento if forma and forma.dia_fechamento else None
+            dia_ven = forma.dia_vencimento if forma and forma.dia_vencimento else None
+
+            if dia_fec:
+                # Ajustar para não ultrapassar o último dia do mês
+                ultimo_dia_mes = calendar.monthrange(mes_ref.year, mes_ref.month)[1]
+                data_fechamento = mes_ref.replace(day=min(dia_fec, ultimo_dia_mes))
+            else:
+                # Padrão: último dia do mês
+                ultimo_dia = calendar.monthrange(mes_ref.year, mes_ref.month)[1]
+                data_fechamento = mes_ref.replace(day=ultimo_dia)
+
+            if dia_ven:
+                # Vencimento no dia configurado do mês seguinte
+                if mes_ref.month == 12:
+                    data_vencimento = date(mes_ref.year + 1, 1, min(dia_ven, 31))
+                else:
+                    ultimo_dia_prox = calendar.monthrange(mes_ref.year, mes_ref.month + 1)[1]
+                    data_vencimento = date(mes_ref.year, mes_ref.month + 1, min(dia_ven, ultimo_dia_prox))
+            else:
+                # Padrão: dia 10 do mês seguinte
+                if mes_ref.month == 12:
+                    data_vencimento = date(mes_ref.year + 1, 1, 10)
+                else:
+                    data_vencimento = date(mes_ref.year, mes_ref.month + 1, 10)
+
+            fatura = FaturaCartao(
+                empresa_id=tenant_id,
+                forma_pagamento_id=forma_pagamento_id,
+                mes_referencia=mes_ref,
+                data_vencimento=data_vencimento,
+                data_fechamento=data_fechamento,
+                valor_total=Decimal('0'),
+                status=StatusFatura.ABERTA
+            )
+            session.add(fatura)
+            session.flush()
+
+        # Recalcular valor total da fatura via query
+        valor_existente = session.exec(
+            select(func.sum(LancamentoFinanceiro.valor_previsto)).where(
+                LancamentoFinanceiro.fatura_cartao_id == fatura.id
+            )
+        ).one() or Decimal('0')
+        fatura.valor_total = (valor_existente or Decimal('0')) + valor_pago
+        session.add(fatura)
+
+        # Vincular lançamento à fatura (sem pagar ainda)
+        lancamento.fatura_cartao_id = fatura.id
+        lancamento.forma_pagamento_id = forma_pagamento_id
+        lancamento.usuario_liquidacao_id = user_id
+        session.add(lancamento)
+
+        log = LogAuditoria(
+            empresa_id=tenant_id,
+            usuario_id=user_id,
+            acao="VINCULAR_FATURA",
+            tabela_afetada="lancamentos_financeiros",
+            registro_id=lancamento.id,
+            dados_anteriores=dados_anteriores,
+            dados_novos=lancamento.model_dump(mode='json')
+        )
+        session.add(log)
+        session.commit()
+
+        return {
+            "acao": "vinculado_a_fatura",
+            "fatura_id": str(fatura.id),
+            "mes_referencia": str(fatura.mes_referencia),
+            "data_vencimento": str(fatura.data_vencimento),
+            "valor_total_fatura": float(fatura.valor_total)
+        }
+
+    elif tipo_operacao == TipoOperacaoPagamento.RECEBIMENTO_CARTAO:
+        # Cartão de crédito como RECEBIMENTO (POS/PDV):
+        # - Taxa da bandeira (ou taxa_padrao da forma) é descontada do valor recebido
+        # - O repasse efetivo pela operadora ocorre em prazo_liquidacao_dias
+        if lancamento.natureza != NaturezaFinanceira.RECEBER:
             raise HTTPException(
                 status_code=400,
-                detail=f"Saldo insuficiente. Disponível (incluindo limite de crédito): R$ {float(saldo_disponivel):.2f}"
+                detail="RECEBIMENTO_CARTAO só pode ser usado para lançamentos de natureza RECEBER."
             )
 
-    if lancamento.natureza == NaturezaFinanceira.RECEBER:
-        conta.saldo_atual += valor_liquido
+        # Determinar taxa: bandeira específica tem prioridade sobre taxa_padrao da forma
+        taxa = Decimal(str(forma.taxa_padrao)) if forma else Decimal('0')
+        if bandeira_id:
+            bandeira = session.exec(
+                select(BandeiraCartao).where(
+                    BandeiraCartao.id == bandeira_id,
+                    BandeiraCartao.empresa_id == tenant_id,
+                    BandeiraCartao.is_active == True
+                )
+            ).first()
+            if bandeira:
+                taxa = Decimal(str(bandeira.taxa_credito_1x))
+
+        valor_taxa = (valor_pago * taxa / Decimal('100')).quantize(Decimal('0.01'))
+        valor_liquido_recebimento = valor_pago - valor_taxa
+
+        # Data de crédito = hoje + prazo_repasse_dias (usa prazo_liquidacao_dias da forma)
+        prazo_repasse = prazo_liquidacao_dias if prazo_liquidacao_dias > 0 else 30
+        data_repasse = data_pagamento + timedelta(days=prazo_repasse)
+
+        lancamento.status = StatusLancamento.CONCILIADO
+        lancamento.data_pagamento = data_repasse
+        lancamento.valor_pago = valor_liquido_recebimento
+        lancamento.juros_multa = Decimal('0')
+        lancamento.desconto = Decimal('0')
+        lancamento.forma_pagamento_id = forma_pagamento_id
+        lancamento.usuario_liquidacao_id = user_id
+        # Nota: saldo bancário é creditado quando o repasse for confirmado
+
+        session.add(lancamento)
+
+    elif tipo_operacao == TipoOperacaoPagamento.COMPENSACAO_BOLETO:
+        # Boleto: baixa com status CONCILIADO e data futura de compensação
+        if not conta_bancaria_id:
+            raise HTTPException(status_code=400, detail="Conta bancária é obrigatória para compensação de boleto.")
+        conta = session.exec(
+            select(ContaBancaria).where(ContaBancaria.id == conta_bancaria_id, ContaBancaria.empresa_id == tenant_id)
+        ).first()
+        if not conta:
+            raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
+
+        valor_liquido = valor_pago + juros_multa - desconto
+        if lancamento.natureza == NaturezaFinanceira.RECEBER:
+            conta.saldo_atual += valor_liquido
+        else:
+            conta.saldo_atual -= valor_liquido
+
+        data_compensacao = data_pagamento + timedelta(days=prazo_liquidacao_dias)
+        lancamento.status = StatusLancamento.CONCILIADO
+        lancamento.data_pagamento = data_compensacao
+        lancamento.valor_pago = valor_pago
+        lancamento.juros_multa = juros_multa
+        lancamento.desconto = desconto
+        lancamento.conta_bancaria_id = conta_bancaria_id
+        lancamento.forma_pagamento_id = forma_pagamento_id
+        lancamento.usuario_liquidacao_id = user_id
+
+        session.add(conta)
+        session.add(lancamento)
+
     else:
-        conta.saldo_atual -= valor_liquido
+        # LIQUIDACAO_DIRETA ou LIQUIDACAO_DIFERIDA: comportamento padrão
+        if not conta_bancaria_id:
+            raise HTTPException(status_code=400, detail="Conta bancária é obrigatória para liquidação direta.")
+        conta = session.exec(
+            select(ContaBancaria).where(ContaBancaria.id == conta_bancaria_id, ContaBancaria.empresa_id == tenant_id)
+        ).first()
+        if not conta:
+            raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
 
-    # Atualizar status do lançamento
-    lancamento.status = StatusLancamento.PAGO
-    lancamento.data_pagamento = data_pagamento
-    lancamento.valor_pago = valor_pago
-    lancamento.juros_multa = juros_multa
-    lancamento.desconto = desconto
-    lancamento.conta_bancaria_id = conta_bancaria_id
-    lancamento.usuario_liquidacao_id = user_id
+        valor_liquido = valor_pago + juros_multa - desconto
 
-    session.add(conta)
-    session.add(lancamento) # <-- Faltava persistir o lançamento também!
+        # Validação de saldo disponível (saldo real + limite de crédito)
+        if lancamento.natureza == NaturezaFinanceira.PAGAR:
+            saldo_disponivel = conta.saldo_atual + conta.limite_credito
+            if valor_liquido > saldo_disponivel:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Saldo insuficiente. Disponível (incluindo limite de crédito): R$ {float(saldo_disponivel):.2f}"
+                )
 
-    # 7. Log de Auditoria
+        if lancamento.natureza == NaturezaFinanceira.RECEBER:
+            conta.saldo_atual += valor_liquido
+        else:
+            conta.saldo_atual -= valor_liquido
+
+        lancamento.status = StatusLancamento.PAGO
+        lancamento.data_pagamento = data_pagamento
+        lancamento.valor_pago = valor_pago
+        lancamento.juros_multa = juros_multa
+        lancamento.desconto = desconto
+        lancamento.conta_bancaria_id = conta_bancaria_id
+        if forma_pagamento_id:
+            lancamento.forma_pagamento_id = forma_pagamento_id
+        lancamento.usuario_liquidacao_id = user_id
+
+        session.add(conta)
+        session.add(lancamento)
+
     log = LogAuditoria(
         empresa_id=tenant_id,
         usuario_id=user_id,
@@ -380,7 +584,7 @@ def liquidar_lancamento(
         dados_novos=lancamento.model_dump(mode='json')
     )
     session.add(log)
-    
+
     session.commit()
     session.refresh(lancamento)
     
@@ -858,7 +1062,11 @@ def list_formas_pagamento(
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session)
 ):
-    return session.exec(select(FormaPagamento).where(FormaPagamento.empresa_id == tenant_id)).all()
+    return session.exec(
+        select(FormaPagamento)
+        .where(FormaPagamento.empresa_id == tenant_id)
+        .order_by(FormaPagamento.nome)
+    ).all()
 
 @router.post("/formas-pagamento", response_model=FormaPagamentoRead, status_code=status.HTTP_201_CREATED)
 def create_forma_pagamento(
@@ -872,3 +1080,305 @@ def create_forma_pagamento(
     session.commit()
     session.refresh(db_forma)
     return db_forma
+
+@router.put("/formas-pagamento/{forma_id}", response_model=FormaPagamentoRead)
+def update_forma_pagamento(
+    forma_id: UUID,
+    forma_update: FormaPagamentoUpdate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    db_forma = session.exec(
+        select(FormaPagamento).where(FormaPagamento.id == forma_id, FormaPagamento.empresa_id == tenant_id)
+    ).one_or_none()
+    if not db_forma:
+        raise HTTPException(status_code=404, detail="Forma de pagamento não encontrada.")
+
+    update_data = forma_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_forma, key, value)
+
+    session.add(db_forma)
+    session.commit()
+    session.refresh(db_forma)
+    return db_forma
+
+@router.delete("/formas-pagamento/{forma_id}")
+def delete_forma_pagamento(
+    forma_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    db_forma = session.exec(
+        select(FormaPagamento).where(FormaPagamento.id == forma_id, FormaPagamento.empresa_id == tenant_id)
+    ).one_or_none()
+    if not db_forma:
+        raise HTTPException(status_code=404, detail="Forma de pagamento não encontrada.")
+
+    # Soft-delete
+    db_forma.is_active = False
+    session.add(db_forma)
+    session.commit()
+    return {"message": "Forma de pagamento desativada com sucesso."}
+
+# --- Faturas de Cartão ---
+
+@router.get("/faturas-cartao", response_model=List[FaturaCartaoRead])
+def list_faturas_cartao(
+    mes_referencia: Optional[date] = None,
+    status_filtro: Optional[StatusFatura] = None,
+    forma_pagamento_id: Optional[UUID] = None,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    stmt = select(FaturaCartao).where(FaturaCartao.empresa_id == tenant_id)
+    if mes_referencia:
+        stmt = stmt.where(FaturaCartao.mes_referencia == mes_referencia)
+    if status_filtro:
+        stmt = stmt.where(FaturaCartao.status == status_filtro)
+    if forma_pagamento_id:
+        stmt = stmt.where(FaturaCartao.forma_pagamento_id == forma_pagamento_id)
+    stmt = stmt.order_by(FaturaCartao.mes_referencia.desc())
+    return session.exec(stmt).all()
+
+@router.get("/faturas-cartao/{fatura_id}", response_model=FaturaCartaoRead)
+def get_fatura_cartao(
+    fatura_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    fatura = session.exec(
+        select(FaturaCartao).where(FaturaCartao.id == fatura_id, FaturaCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not fatura:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    return fatura
+
+@router.get("/faturas-cartao/{fatura_id}/lancamentos")
+def get_lancamentos_fatura(
+    fatura_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    fatura = session.exec(
+        select(FaturaCartao).where(FaturaCartao.id == fatura_id, FaturaCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not fatura:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+
+    lancamentos = session.exec(
+        select(LancamentoFinanceiro).where(LancamentoFinanceiro.fatura_cartao_id == fatura_id)
+    ).all()
+    return [l.model_dump(mode='json') for l in lancamentos]
+
+@router.post("/faturas-cartao", response_model=FaturaCartaoRead, status_code=status.HTTP_201_CREATED)
+def create_fatura_cartao(
+    fatura: FaturaCartaoCreate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    # Validar forma de pagamento
+    forma = session.exec(
+        select(FormaPagamento).where(
+            FormaPagamento.id == fatura.forma_pagamento_id,
+            FormaPagamento.empresa_id == tenant_id
+        )
+    ).one_or_none()
+    if not forma:
+        raise HTTPException(status_code=404, detail="Forma de pagamento não encontrada.")
+
+    db_fatura = FaturaCartao(**fatura.model_dump())
+    db_fatura.empresa_id = tenant_id
+    session.add(db_fatura)
+    session.commit()
+    session.refresh(db_fatura)
+    return db_fatura
+
+@router.post("/faturas-cartao/{fatura_id}/pagar")
+def pagar_fatura_cartao(
+    fatura_id: UUID,
+    payload: PagarFaturaPayload,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    user_id: UUID = Depends(get_current_user_id),
+    session: Session = Depends(get_session)
+):
+    """
+    Paga uma fatura de cartão de crédito fechada.
+    Gera um LancamentoFinanceiro de saída e debita a conta bancária.
+    """
+    fatura = session.exec(
+        select(FaturaCartao).where(FaturaCartao.id == fatura_id, FaturaCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not fatura:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+
+    if fatura.status == StatusFatura.PAGA:
+        raise HTTPException(status_code=400, detail="Esta fatura já está paga.")
+
+    if fatura.status == StatusFatura.CANCELADA:
+        raise HTTPException(status_code=400, detail="Esta fatura está cancelada.")
+
+    conta = session.exec(
+        select(ContaBancaria).where(
+            ContaBancaria.id == payload.conta_bancaria_id,
+            ContaBancaria.empresa_id == tenant_id
+        )
+    ).first()
+    if not conta:
+        raise HTTPException(status_code=404, detail="Conta bancária não encontrada.")
+
+    desconto = payload.desconto or Decimal('0')
+    valor_pago = fatura.valor_total - desconto
+
+    # Buscar plano_contas da forma de pagamento (conta transitória) ou fallback
+    forma = session.get(FormaPagamento, fatura.forma_pagamento_id)
+    plano_contas_id = forma.conta_transitoria_id if forma else None
+
+    if not plano_contas_id:
+        # Fallback: buscar primeira conta analítica de passivo ou despesa para o tenant.
+        # Para garantir a contabilidade correta, configure conta_transitoria_id na forma de pagamento.
+        from app.models.database import TipoConta as TC
+        plano_fallback = session.exec(
+            select(PlanoConta).where(
+                PlanoConta.empresa_id == tenant_id,
+                PlanoConta.is_analitica == True,
+                PlanoConta.ativo == True,
+                PlanoConta.tipo.in_([TC.PASSIVO, TC.DESPESA])
+            )
+        ).first()
+        if not plano_fallback:
+            raise HTTPException(
+                status_code=400,
+                detail="Configure uma conta contábil transitória (passivo/despesa) na forma de pagamento do cartão para registrar o pagamento da fatura corretamente."
+            )
+        plano_contas_id = plano_fallback.id
+
+    # Debitar conta bancária
+    conta.saldo_atual -= valor_pago
+    session.add(conta)
+
+    # Criar lançamento de pagamento da fatura
+    lancamento_fatura = LancamentoFinanceiro(
+        empresa_id=tenant_id,
+        descricao=f"Pagamento Fatura Cartão — {fatura.mes_referencia.strftime('%m/%Y')}",
+        natureza=NaturezaFinanceira.PAGAR,
+        tipo=TipoLancamento.CAIXA,
+        status=StatusLancamento.PAGO,
+        valor_previsto=fatura.valor_total,
+        valor_pago=valor_pago,
+        desconto=desconto,
+        data_vencimento=fatura.data_vencimento,
+        data_pagamento=payload.data_pagamento,
+        data_competencia=payload.data_pagamento,
+        conta_bancaria_id=payload.conta_bancaria_id,
+        forma_pagamento_id=fatura.forma_pagamento_id,
+        plano_contas_id=plano_contas_id,
+        usuario_criacao_id=user_id,
+        usuario_liquidacao_id=user_id,
+    )
+    session.add(lancamento_fatura)
+    session.flush()
+
+    # Atualizar fatura
+    fatura.status = StatusFatura.PAGA
+    fatura.lancamento_pagamento_id = lancamento_fatura.id
+    session.add(fatura)
+
+    log = LogAuditoria(
+        empresa_id=tenant_id,
+        usuario_id=user_id,
+        acao="PAGAR_FATURA",
+        tabela_afetada="faturas_cartao",
+        registro_id=fatura.id,
+        dados_novos={"lancamento_id": str(lancamento_fatura.id), "valor_pago": float(valor_pago)}
+    )
+    session.add(log)
+    session.commit()
+
+    return {
+        "message": "Fatura paga com sucesso.",
+        "lancamento_id": str(lancamento_fatura.id),
+        "valor_pago": float(valor_pago)
+    }
+
+# --- Bandeiras de Cartão ---
+
+@router.get("/bandeiras-cartao", response_model=List[BandeiraCartaoRead])
+def list_bandeiras_cartao(
+    forma_pagamento_id: Optional[UUID] = None,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    stmt = select(BandeiraCartao).where(
+        BandeiraCartao.empresa_id == tenant_id,
+        BandeiraCartao.is_active == True
+    )
+    if forma_pagamento_id:
+        stmt = stmt.where(BandeiraCartao.forma_pagamento_id == forma_pagamento_id)
+    stmt = stmt.order_by(BandeiraCartao.nome)
+    return session.exec(stmt).all()
+
+@router.post("/bandeiras-cartao", response_model=BandeiraCartaoRead, status_code=status.HTTP_201_CREATED)
+def create_bandeira_cartao(
+    bandeira: BandeiraCartaoCreate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    # Validar forma de pagamento
+    forma = session.exec(
+        select(FormaPagamento).where(
+            FormaPagamento.id == bandeira.forma_pagamento_id,
+            FormaPagamento.empresa_id == tenant_id
+        )
+    ).one_or_none()
+    if not forma:
+        raise HTTPException(status_code=404, detail="Forma de pagamento não encontrada.")
+
+    db_bandeira = BandeiraCartao(**bandeira.model_dump())
+    db_bandeira.empresa_id = tenant_id
+    session.add(db_bandeira)
+    session.commit()
+    session.refresh(db_bandeira)
+    return db_bandeira
+
+@router.put("/bandeiras-cartao/{bandeira_id}", response_model=BandeiraCartaoRead)
+def update_bandeira_cartao(
+    bandeira_id: UUID,
+    bandeira_update: BandeiraCartaoUpdate,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    db_bandeira = session.exec(
+        select(BandeiraCartao).where(BandeiraCartao.id == bandeira_id, BandeiraCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not db_bandeira:
+        raise HTTPException(status_code=404, detail="Bandeira não encontrada.")
+
+    update_data = bandeira_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_bandeira, key, value)
+
+    session.add(db_bandeira)
+    session.commit()
+    session.refresh(db_bandeira)
+    return db_bandeira
+
+@router.delete("/bandeiras-cartao/{bandeira_id}")
+def delete_bandeira_cartao(
+    bandeira_id: UUID,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    session: Session = Depends(get_session)
+):
+    db_bandeira = session.exec(
+        select(BandeiraCartao).where(BandeiraCartao.id == bandeira_id, BandeiraCartao.empresa_id == tenant_id)
+    ).one_or_none()
+    if not db_bandeira:
+        raise HTTPException(status_code=404, detail="Bandeira não encontrada.")
+
+    # Soft-delete
+    db_bandeira.is_active = False
+    session.add(db_bandeira)
+    session.commit()
+    return {"message": "Bandeira desativada com sucesso."}
+
+

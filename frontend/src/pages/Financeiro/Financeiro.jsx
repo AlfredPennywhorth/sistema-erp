@@ -4,6 +4,7 @@ import { Landmark, Plus, Search, Building2, CreditCard, Building, Layers } from 
 import { FinanceiroAPI } from '../../lib/financeiro';
 import PlanoContas from './PlanoContas';
 import CentrosCusto from './CentrosCusto';
+import FaturasCartao from './FaturasCartao';
 
 function ContasBancarias() {
   const [contas, setContas] = useState([]);
@@ -351,39 +352,33 @@ export default function Financeiro() {
             <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-primary" />
           )}
         </button>
-        {/* 
+
         <button
-          onClick={() => setActiveTab('plano')}
+          onClick={() => setActiveTab('faturas')}
           className={`pb-4 px-2 text-sm font-bold transition-colors relative ${
-            activeTab === 'plano' 
+            activeTab === 'faturas' 
               ? 'text-brand-primary' 
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
           }`}
         >
           <div className="flex items-center gap-2">
             <CreditCard size={16} />
-            Plano de Contas
+            Faturas de Cartão
           </div>
-          {activeTab === 'plano' && (
+          {activeTab === 'faturas' && (
             <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-primary" />
           )}
         </button>
+
+        {/* 
+        <button
+          onClick={() => setActiveTab('plano')}
+          ...
+        />
         <button
           onClick={() => setActiveTab('centros')}
-          className={`pb-4 px-2 text-sm font-bold transition-colors relative ${
-            activeTab === 'centros' 
-              ? 'text-brand-primary' 
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Layers size={16} />
-            Centros de Custo
-          </div>
-          {activeTab === 'centros' && (
-            <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-primary" />
-          )}
-        </button>
+          ...
+        />
         */}
       </div>
 
@@ -393,6 +388,7 @@ export default function Financeiro() {
         transition={{ delay: 0.1 }}
       >
         {activeTab === 'contas' && <ContasBancarias />}
+        {activeTab === 'faturas' && <FaturasCartao />}
         {/* {activeTab === 'plano' && <PlanoContas />} */}
         {/* {activeTab === 'centros' && <CentrosCusto />} */}
       </motion.div>

@@ -148,6 +148,28 @@ class StatusLancamento(str, Enum):
     CANCELADO = "CANCELADO"
     CONCILIADO = "CONCILIADO"
 
+class TipoFormaPagamento(str, Enum):
+    PIX = "PIX"
+    TRANSFERENCIA = "TRANSFERENCIA"
+    BOLETO = "BOLETO"
+    CARTAO_DEBITO = "CARTAO_DEBITO"
+    CARTAO_CREDITO = "CARTAO_CREDITO"
+    DINHEIRO = "DINHEIRO"
+    CHEQUE = "CHEQUE"
+
+class TipoOperacaoPagamento(str, Enum):
+    LIQUIDACAO_DIRETA = "LIQUIDACAO_DIRETA"
+    GERACAO_FATURA = "GERACAO_FATURA"
+    COMPENSACAO_BOLETO = "COMPENSACAO_BOLETO"
+    LIQUIDACAO_DIFERIDA = "LIQUIDACAO_DIFERIDA"
+    RECEBIMENTO_CARTAO = "RECEBIMENTO_CARTAO"
+
+class StatusFatura(str, Enum):
+    ABERTA = "ABERTA"
+    FECHADA = "FECHADA"
+    PAGA = "PAGA"
+    CANCELADA = "CANCELADA"
+
 class StatusEmprestimo(str, Enum):
     ATIVO = "ATIVO"
     QUITADO = "QUITADO"
@@ -265,8 +287,35 @@ class FormaPagamento(FullAuditMixin, table=True):
     __tablename__ = "formas_pagamento"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
-    nome: str = Field(max_length=100) # Ex: PIX, Boleto, Cartão de Crédito
+    nome: str = Field(max_length=100)
     taxa_padrao: PyDecimal = Field(default=0, sa_type=Numeric(precision=5, scale=2))
+    is_active: bool = Field(default=True)
+    # Campos operacionais
+    tipo: Optional[TipoFormaPagamento] = Field(default=None, nullable=True)
+    tipo_operacao: TipoOperacaoPagamento = Field(default=TipoOperacaoPagamento.LIQUIDACAO_DIRETA)
+    baixa_imediata: bool = Field(default=True)
+    gera_obrigacao_futura: bool = Field(default=False)
+    prazo_liquidacao_dias: int = Field(default=0)
+    permite_parcelamento: bool = Field(default=False)
+    max_parcelas: int = Field(default=1)
+    conta_transitoria_id: Optional[UUID] = Field(default=None, foreign_key="plano_contas.id", nullable=True)
+    # Calendário de cartão
+    dia_fechamento: Optional[int] = Field(default=None, nullable=True)   # Dia do mês em que a fatura fecha
+    dia_vencimento: Optional[int] = Field(default=None, nullable=True)   # Dia do mês em que a fatura vence
+
+
+class BandeiraCartao(FullAuditMixin, table=True):
+    """Taxas de administração por bandeira de cartão, por empresa."""
+    __tablename__ = "bandeiras_cartao"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
+    forma_pagamento_id: UUID = Field(foreign_key="formas_pagamento.id", index=True)
+    nome: str = Field(max_length=50)  # Visa, Mastercard, Elo, Amex, Hipercard
+    taxa_debito: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))        # Ex: 1.20% → 1.2000
+    taxa_credito_1x: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))
+    taxa_credito_2_6x: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))
+    taxa_credito_7_12x: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))
+    prazo_repasse_dias: int = Field(default=30)  # Dias para crédito na conta bancária
     is_active: bool = Field(default=True)
 
 class JournalEntry(AuditMixin, table=True):
@@ -401,6 +450,18 @@ class ParceiroContato(FullAuditMixin, table=True):
 
     parceiro: "Parceiro" = Relationship(back_populates="contatos")
 
+class FaturaCartao(FullAuditMixin, table=True):
+    __tablename__ = "faturas_cartao"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    forma_pagamento_id: UUID = Field(foreign_key="formas_pagamento.id", index=True)
+    mes_referencia: date = Field(index=True)  # Sempre YYYY-MM-01
+    data_vencimento: date
+    data_fechamento: date
+    valor_total: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    status: StatusFatura = Field(default=StatusFatura.ABERTA, index=True)
+    # FK circular resolvida via use_alter na migração; sem restrição FK no model
+    lancamento_pagamento_id: Optional[UUID] = Field(default=None, nullable=True)
+
 class LancamentoFinanceiro(FullAuditMixin, table=True):
     __tablename__ = "lancamentos_financeiros"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
@@ -422,6 +483,7 @@ class LancamentoFinanceiro(FullAuditMixin, table=True):
     centro_custo_id: Optional[UUID] = Field(default=None, foreign_key="centros_custo.id", index=True)
     conta_bancaria_id: Optional[UUID] = Field(default=None, foreign_key="contas_bancarias.id", index=True)
     forma_pagamento_id: Optional[UUID] = Field(default=None, foreign_key="formas_pagamento.id", index=True)
+    fatura_cartao_id: Optional[UUID] = Field(default=None, foreign_key="faturas_cartao.id", nullable=True, index=True)
     
     # Valores
     valor_previsto: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))

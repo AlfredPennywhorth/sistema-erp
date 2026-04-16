@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Zap, TrendingDown, TrendingUp, DollarSign, Calendar, Tag, User, Layers, Loader2, Check } from 'lucide-react';
+import { X, Zap, TrendingDown, TrendingUp, DollarSign, Calendar, Tag, User, Layers, Loader2, Check, CreditCard } from 'lucide-react';
 import { api } from '../../lib/api';
 
 /* ===========================
@@ -10,6 +10,7 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
   const [loading, setLoading] = useState(false);
   const [regras, setRegras] = useState([]);
   const [parceiros, setParceiros] = useState([]);
+  const [formasPagamento, setFormasPagamento] = useState([]);
   const [showNovoParceiro, setShowNovoParceiro] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -22,6 +23,7 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
     plano_contas_id: '',
     parceiro_id: '',
     centro_custo_id: '',
+    forma_pagamento_id: '',
   });
 
   /* ===========================
@@ -39,6 +41,7 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
         plano_contas_id: '',
         parceiro_id: '',
         centro_custo_id: '',
+        forma_pagamento_id: '',
       });
 
       fetchData();
@@ -47,13 +50,15 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
 
   const fetchData = async () => {
     try {
-      const [regrasRes, parceirosRes] = await Promise.all([
+      const [regrasRes, parceirosRes, formasRes] = await Promise.all([
         api.get('/accounting/rules'),
-        api.get('/parceiros/')
+        api.get('/parceiros/'),
+        api.get('/financeiro/formas-pagamento')
       ]);
 
       setRegras(regrasRes.data);
       setParceiros(parceirosRes.data);
+      setFormasPagamento(formasRes.data);
 
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
@@ -77,8 +82,9 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
         tipo_evento: formData.tipo_evento || null,
         plano_contas_id: formData.plano_contas_id || null,
         parceiro_id: formData.parceiro_id || null,
-        centro_custo_id: formData.centro_custo_id || null, // Corrigido
+        centro_custo_id: formData.centro_custo_id || null,
         documento: formData.documento || null,
+        forma_pagamento_id: formData.forma_pagamento_id || null,
       };
 
       await api.post('/financeiro/', payload);
@@ -271,6 +277,26 @@ const QuickLaunchModal = ({ isOpen, onClose, onSuccess, initialNatureza = 'PAGAR
                 {parceiros.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.nome_razao}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Forma de Pagamento */}
+            <div>
+              <label className={labelClass}>
+                <CreditCard size={12} className="text-sky-500" />
+                Forma de Pagamento (Opcional)
+              </label>
+              <select
+                className={`${inputClass} cursor-pointer`}
+                value={formData.forma_pagamento_id}
+                onChange={(e) => setFormData({ ...formData, forma_pagamento_id: e.target.value })}
+              >
+                <option value="">— Não especificado —</option>
+                {formasPagamento.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
                   </option>
                 ))}
               </select>

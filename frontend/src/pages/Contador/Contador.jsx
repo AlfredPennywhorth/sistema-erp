@@ -36,8 +36,8 @@ function EmpresaCard({ empresa, onEntrar }) {
       try {
         const res = await api.get(`/contador/empresas/${empresa.id}/pendencias`);
         if (!cancelled) setPendencias(res.data);
-      } catch {
-        // Silencioso — pendências são informativas
+      } catch (err) {
+        console.error('[Contador] Erro ao carregar pendências:', err);
       } finally {
         if (!cancelled) setLoadingPend(false);
       }
@@ -123,6 +123,7 @@ export default function Contador() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [switching, setSwitching] = useState(null);
+  const [switchError, setSwitchError] = useState(null);
 
   const fetchEmpresas = useCallback(async () => {
     setLoading(true);
@@ -143,6 +144,7 @@ export default function Contador() {
 
   const handleEntrar = async (empresa) => {
     setSwitching(empresa.id);
+    setSwitchError(null);
     try {
       // 1. Registrar alternância na trilha de auditoria
       await api.post('/contador/switch-context', { empresa_id: empresa.id });
@@ -154,7 +156,7 @@ export default function Contador() {
       navigate('/dashboard');
     } catch (err) {
       const detail = err?.response?.data?.detail || 'Erro ao entrar na empresa.';
-      alert(detail);
+      setSwitchError(detail);
     } finally {
       setSwitching(null);
     }
@@ -216,6 +218,20 @@ export default function Contador() {
           <p className="text-xs text-slate-500">
             Solicite ao administrador que vincule sua conta como contador.
           </p>
+        </div>
+      )}
+
+      {/* Erro de troca de contexto */}
+      {switchError && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-500">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span className="text-sm font-medium">{switchError}</span>
+          <button
+            onClick={() => setSwitchError(null)}
+            className="ml-auto text-rose-400 hover:text-rose-500 text-xs font-bold"
+          >
+            ✕
+          </button>
         </div>
       )}
 

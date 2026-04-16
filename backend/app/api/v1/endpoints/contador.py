@@ -121,7 +121,7 @@ async def get_pendencias_empresa(
         select(func.count(ContaBancaria.id)).where(
             ContaBancaria.empresa_id == empresa_id,
             ContaBancaria.ativo == True,
-            ContaBancaria.conta_contabil_id == None,
+            ContaBancaria.conta_contabil_id.is_(None),
         )
     ).one()
 

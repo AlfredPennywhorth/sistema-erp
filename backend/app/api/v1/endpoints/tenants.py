@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
 from sqlmodel import Session, select
 from uuid import UUID
 from datetime import datetime
@@ -168,16 +168,20 @@ def setup_tenant(
 
 @router.get("/me", response_model=Dict[str, Any])
 def get_current_tenant_info(
+    request: Request,
     session: Session = Depends(get_session),
     tenant_id: str = Header(None, alias="X-Tenant-ID"),
-    user_id: str = Header(None, alias="X-User-ID")
 ):
     """
     Retorna as informações da empresa conectada ao Tenant ID atual.
+    O usuário é identificado pelo JWT validado pelo middleware.
     """
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant ID não fornecido.")
-    
+
+    # Identidade vem do JWT validado pelo middleware — nunca do header X-User-ID
+    user_id = getattr(request.state, "user_id", None)
+
     try:
         tenant_uuid = UUID(tenant_id)
         empresa = session.get(Empresa, tenant_uuid)
@@ -194,10 +198,8 @@ def get_current_tenant_info(
             "user_role": None
         }
 
-        # Tentar buscar a role do usuário
         if user_id:
-            from app.models.database import UsuarioEmpresa
-            user_uuid = user_id if isinstance(user_id, UUID) else UUID(user_id)
+            user_uuid = UUID(str(user_id))
             stmt = select(UsuarioEmpresa).where(
                 UsuarioEmpresa.usuario_id == user_uuid,
                 UsuarioEmpresa.empresa_id == tenant_uuid
@@ -214,18 +216,20 @@ def get_current_tenant_info(
 
 @router.get("/list")
 def list_user_tenants(
+    request: Request,
     session: Session = Depends(get_session),
-    user_id: str = Header(None, alias="X-User-ID")
 ):
     """
-    Lista todas as empresas vinculadas ao usuário atual.
+    Lista todas as empresas vinculadas ao usuário autenticado.
+    Requer JWT válido — o user_id é derivado do token pelo middleware.
     """
+    # Identidade vem do JWT validado pelo middleware — nunca do header X-User-ID
+    user_id = getattr(request.state, "user_id", None)
     if not user_id:
-        return []
-    
+        raise HTTPException(status_code=401, detail="Autenticação obrigatória.")
+
     try:
-        user_uuid = UUID(user_id)
-        # Consulta join entre UsuarioEmpresa e Empresa
+        user_uuid = UUID(str(user_id))
         stmt = select(Empresa).join(UsuarioEmpresa).where(UsuarioEmpresa.usuario_id == user_uuid)
         results = session.exec(stmt).all()
         
@@ -238,5 +242,4 @@ def list_user_tenants(
             for empresa in results
         ]
     except Exception as e:
-        print(f"Erro ao listar tenants do usuário: {e}")
-        return []
+        raise HTTPException(status_code=500, detail=f"Erro ao listar empresas: {str(e)}")

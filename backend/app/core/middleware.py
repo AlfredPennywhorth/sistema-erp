@@ -40,7 +40,6 @@ if ENABLE_MOCK_AUTH:
 # ATENÇÃO: não incluir "/" ou "" aqui pois "startswith('/')" é verdadeiro para todos os paths.
 PUBLIC_PATHS = [
     "/api/v1/tenants/setup",
-    "/api/v1/tenants/list",
     "/api/v1/tenants/check-cnpj",
     "/api/v1/team/invite-details",
     "/api/v1/team/finalize-registration",

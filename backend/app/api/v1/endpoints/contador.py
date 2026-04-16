@@ -1,15 +1,18 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select, func
 from uuid import UUID
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 from app.models.database import (
     Empresa, UsuarioEmpresa, UserRole,
     HonorariosContador, TrilhaAuditoriaContador,
-    LancamentoFinanceiro, StatusLancamento,
+    LancamentoFinanceiro, StatusLancamento, NaturezaFinanceira,
     ContaBancaria, RegraContabil, StatusPagamento,
-    SegmentoMercado,
+    SegmentoMercado, Emprestimo, ParcelaEmprestimo,
+    AplicacaoFinanceira, StatusEmprestimo, StatusParcela,
+    StatusAplicacaoFinanceira,
 )
 from app.schemas.contador import (
     EmpresaContadorRead,
@@ -19,6 +22,8 @@ from app.schemas.contador import (
     PendenciasEmpresaRead,
 )
 from app.core.auth import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -97,6 +102,7 @@ async def switch_tenant_context(
     db.add(log)
     db.commit()
 
+    logger.info("[CONTADOR] switch-context user=%s empresa=%s", user_uuid, payload.empresa_id)
     return {"status": "success", "message": f"Contexto alterado para empresa {payload.empresa_id}"}
 
 
@@ -227,3 +233,255 @@ async def create_honorario(
     db.commit()
     db.refresh(honorario)
     return honorario
+
+
+# ---------------------------------------------------------------------------
+# B.1 — Resumo consolidado de uma empresa para o portal do contador
+# ---------------------------------------------------------------------------
+
+@router.get("/empresas/{empresa_id}/resumo")
+async def get_resumo_empresa(
+    empresa_id: UUID,
+    request: Request,
+    db: Session = Depends(get_session)
+):
+    """
+    Retorna resumo financeiro consolidado de uma empresa vinculada ao contador.
+    Inclui: saldo bancário total, contas a pagar, contas a receber, regras contábeis e pendências.
+    """
+    user_uuid = _require_user(request)
+    _require_contador_access(user_uuid, empresa_id, db)
+
+    logger.info("[CONTADOR] resumo empresa=%s user=%s", empresa_id, user_uuid)
+
+    today = date.today()
+
+    # Saldo bancário total (soma de todas as contas ativas)
+    saldo_bancario = db.exec(
+        select(func.coalesce(func.sum(ContaBancaria.saldo_atual), 0)).where(
+            ContaBancaria.empresa_id == empresa_id,
+            ContaBancaria.ativo == True,
+        )
+    ).one()
+
+    # Contas a pagar em aberto
+    total_pagar = db.exec(
+        select(func.coalesce(func.sum(LancamentoFinanceiro.valor_previsto), 0)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+        )
+    ).one()
+
+    # Contas a receber em aberto
+    total_receber = db.exec(
+        select(func.coalesce(func.sum(LancamentoFinanceiro.valor_previsto), 0)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+        )
+    ).one()
+
+    # Regras contábeis ativas
+    total_regras = db.exec(
+        select(func.count(RegraContabil.id)).where(
+            RegraContabil.empresa_id == empresa_id,
+            RegraContabil.ativo == True,
+        )
+    ).one()
+
+    # Lançamentos em aberto (pendências)
+    lancamentos_abertos = db.exec(
+        select(func.count(LancamentoFinanceiro.id)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+        )
+    ).one()
+
+    # Contas sem vínculo contábil
+    contas_sem_vinculo = db.exec(
+        select(func.count(ContaBancaria.id)).where(
+            ContaBancaria.empresa_id == empresa_id,
+            ContaBancaria.ativo == True,
+            ContaBancaria.conta_contabil_id.is_(None),
+        )
+    ).one()
+
+    # Vencidos (pagamentos atrasados)
+    lancamentos_vencidos = db.exec(
+        select(func.count(LancamentoFinanceiro.id)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+            LancamentoFinanceiro.data_vencimento < today,
+        )
+    ).one()
+
+    # Fluxo do mês corrente (entradas - saídas já liquidadas)
+    primeiro_dia_mes = today.replace(day=1)
+    entradas_mes = db.exec(
+        select(func.coalesce(func.sum(LancamentoFinanceiro.valor_pago), 0)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
+            LancamentoFinanceiro.status.in_([StatusLancamento.PAGO, StatusLancamento.CONCILIADO]),
+            LancamentoFinanceiro.data_pagamento >= primeiro_dia_mes,
+            LancamentoFinanceiro.data_pagamento <= today,
+        )
+    ).one()
+
+    saidas_mes = db.exec(
+        select(func.coalesce(func.sum(LancamentoFinanceiro.valor_pago), 0)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
+            LancamentoFinanceiro.status.in_([StatusLancamento.PAGO, StatusLancamento.CONCILIADO]),
+            LancamentoFinanceiro.data_pagamento >= primeiro_dia_mes,
+            LancamentoFinanceiro.data_pagamento <= today,
+        )
+    ).one()
+
+    return {
+        "empresa_id": str(empresa_id),
+        "saldo_bancario_total": float(saldo_bancario or 0),
+        "contas_a_pagar": float(total_pagar or 0),
+        "contas_a_receber": float(total_receber or 0),
+        "total_regras_contabeis": total_regras,
+        "lancamentos_abertos": lancamentos_abertos,
+        "lancamentos_vencidos": lancamentos_vencidos,
+        "contas_sem_vinculo_contabil": contas_sem_vinculo,
+        "fluxo_mes_corrente": {
+            "entradas": float(entradas_mes or 0),
+            "saidas": float(saidas_mes or 0),
+            "saldo": float((entradas_mes or 0) - (saidas_mes or 0)),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# C — Checklist de Fechamento Mensal
+# ---------------------------------------------------------------------------
+
+@router.get("/empresas/{empresa_id}/fechamento")
+async def get_checklist_fechamento(
+    empresa_id: UUID,
+    request: Request,
+    db: Session = Depends(get_session)
+):
+    """
+    Retorna checklist de pendências para fechamento mensal de uma empresa vinculada.
+    Cada item indica se está ok (concluído) ou pendente, com contagem.
+    """
+    user_uuid = _require_user(request)
+    _require_contador_access(user_uuid, empresa_id, db)
+
+    logger.info("[CONTADOR] fechamento empresa=%s user=%s", empresa_id, user_uuid)
+
+    today = date.today()
+
+    lancamentos_abertos = db.exec(
+        select(func.count(LancamentoFinanceiro.id)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+        )
+    ).one()
+
+    lancamentos_vencidos = db.exec(
+        select(func.count(LancamentoFinanceiro.id)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+            LancamentoFinanceiro.data_vencimento < today,
+        )
+    ).one()
+
+    contas_sem_vinculo = db.exec(
+        select(func.count(ContaBancaria.id)).where(
+            ContaBancaria.empresa_id == empresa_id,
+            ContaBancaria.ativo == True,
+            ContaBancaria.conta_contabil_id.is_(None),
+        )
+    ).one()
+
+    total_regras = db.exec(
+        select(func.count(RegraContabil.id)).where(
+            RegraContabil.empresa_id == empresa_id,
+            RegraContabil.ativo == True,
+        )
+    ).one()
+
+    emprestimos_ativos = db.exec(
+        select(func.count(Emprestimo.id)).where(
+            Emprestimo.empresa_id == empresa_id,
+            Emprestimo.status == StatusEmprestimo.ATIVO,
+        )
+    ).one()
+
+    parcelas_vencidas = db.exec(
+        select(func.count(ParcelaEmprestimo.id))
+        .join(Emprestimo, ParcelaEmprestimo.emprestimo_id == Emprestimo.id)
+        .where(
+            Emprestimo.empresa_id == empresa_id,
+            ParcelaEmprestimo.status == StatusParcela.PENDENTE,
+            ParcelaEmprestimo.data_vencimento <= today,
+        )
+    ).one()
+
+    aplicacoes_ativas = db.exec(
+        select(func.count(AplicacaoFinanceira.id)).where(
+            AplicacaoFinanceira.empresa_id == empresa_id,
+            AplicacaoFinanceira.status == StatusAplicacaoFinanceira.ATIVA,
+        )
+    ).one()
+
+    checklist = [
+        {
+            "item": "contas_a_pagar_em_aberto",
+            "descricao": "Contas a pagar em aberto",
+            "valor": lancamentos_abertos,
+            "ok": lancamentos_abertos == 0,
+        },
+        {
+            "item": "titulos_vencidos",
+            "descricao": "Títulos vencidos (pagar/receber)",
+            "valor": lancamentos_vencidos,
+            "ok": lancamentos_vencidos == 0,
+        },
+        {
+            "item": "contas_sem_vinculo_contabil",
+            "descricao": "Contas bancárias sem vínculo contábil",
+            "valor": contas_sem_vinculo,
+            "ok": contas_sem_vinculo == 0,
+        },
+        {
+            "item": "regras_contabeis_configuradas",
+            "descricao": "Regras contábeis configuradas",
+            "valor": total_regras,
+            "ok": total_regras > 0,
+        },
+        {
+            "item": "parcelas_emprestimo_vencidas",
+            "descricao": "Parcelas de empréstimo vencidas",
+            "valor": parcelas_vencidas,
+            "ok": parcelas_vencidas == 0,
+        },
+        {
+            "item": "emprestimos_ativos",
+            "descricao": "Empréstimos ativos (requer cobertura contábil)",
+            "valor": emprestimos_ativos,
+            "ok": True,  # Informativo — empréstimos ativos não bloqueiam fechamento
+        },
+        {
+            "item": "aplicacoes_financeiras_ativas",
+            "descricao": "Aplicações financeiras ativas",
+            "valor": aplicacoes_ativas,
+            "ok": True,  # Informativo — aplicações ativas não bloqueiam fechamento
+        },
+    ]
+
+    itens_pendentes = sum(1 for item in checklist if not item["ok"])
+    pronto_para_fechar = itens_pendentes == 0
+
+    return {
+        "empresa_id": str(empresa_id),
+        "data_referencia": str(today),
+        "pronto_para_fechar": pronto_para_fechar,
+        "itens_pendentes": itens_pendentes,
+        "checklist": checklist,
+    }

@@ -4,6 +4,7 @@ from sqlalchemy import text as sa_text
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
+import logging
 import os
 import time
 import httpx
@@ -11,6 +12,8 @@ import httpx
 from app.models.database import engine, Empresa, UsuarioEmpresa, User, Invite, UserRole, InviteStatus, LogAuditoria
 from app.core.auth import RoleChecker, get_current_tenant_id, get_session
 from app.services.resend_service import ResendService
+
+logger = logging.getLogger(__name__)
 
 # Configurações do Supabase enviadas via variáveis de ambiente
 supabase_url = os.getenv("SUPABASE_URL")
@@ -22,7 +25,7 @@ async def confirm_supabase_email_direct(user_id: str):
     Usado para evitar dependência do SDK 'supabase' que falha em alguns ambientes.
     """
     if not supabase_url or not supabase_admin_key:
-        print("--- [AUTH ADMIN] Aviso: Chaves do Supabase não configuradas para auto-confirmação ---")
+        logger.warning("[AUTH ADMIN] Chaves do Supabase não configuradas para auto-confirmação")
         return False
     
     url = f"{supabase_url}/auth/v1/admin/users/{user_id}"
@@ -36,13 +39,13 @@ async def confirm_supabase_email_direct(user_id: str):
         async with httpx.AsyncClient() as client:
             response = await client.put(url, headers=headers, json={"email_confirm": True})
             if response.status_code in [200, 201]:
-                print(f"--- [AUTH ADMIN] E-mail do usuário {user_id} confirmado via API REST ---")
+                logger.info("[AUTH ADMIN] E-mail do usuário %s confirmado via API REST", user_id)
                 return True
             else:
-                print(f"--- [AUTH ADMIN] Erro na API Supabase: {response.status_code} - {response.text} ---")
+                logger.error("[AUTH ADMIN] Erro na API Supabase: %s - %s", response.status_code, response.text)
                 return False
     except Exception as e:
-        print(f"--- [AUTH ADMIN] Exceção na chamada REST: {str(e)} ---")
+        logger.error("[AUTH ADMIN] Exceção na chamada REST: %s", str(e))
         return False
 
 router = APIRouter()
@@ -56,10 +59,8 @@ def list_team_members(
     db: Session = Depends(get_session)
 ):
     start_time = time.time()
-    print(f">>> [TEAM] list_team_members Iniciando em {start_time}")
+    logger.debug("[TEAM] list_team_members tenant=%s", tenant_id)
     try:
-        print(f"[DEBUG BACKEND] Listando membros para o Tenant ID: {tenant_id}")
-        print(f"[DEBUG TEAM] Tenant ID: {tenant_id}")
         """
         Lista os membros da equipe e os convites pendentes da empresa atual.
         """
@@ -120,7 +121,7 @@ def list_team_members(
             "members": team_list
         }
     except Exception as e:
-        print(f"[CRITICAL ERROR] GET /members falhou: {str(e)}")
+        logger.error("[TEAM] GET /members falhou: %s", str(e))
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro interno ao listar membros da equipe.")
@@ -143,7 +144,7 @@ def invite_member(
         if not email:
             raise HTTPException(status_code=400, detail="E-mail é obrigatório.")
 
-        print(f"[DEBUG] Iniciando convite para {email} no Tenant {tenant_id}")
+        logger.info("[TEAM] invite tenant=%s email=%s", tenant_id, email)
 
         # 1. Gerar token único
         token = str(uuid4())
@@ -175,15 +176,13 @@ def invite_member(
         def process_email_sending():
             try:
                 if env == "development" or dev_mode:
-                    print("\n" + "="*50)
-                    print(f"--- [MODO DESENVOLVIMENTO] CONVITE EM BACKGROUND ---")
-                    print(f"Destinatário: {email}")
-                    print(f"LINK: {invite_link}")
-                    print("="*50 + "\n")
+                    logger.info(
+                        "[TEAM] [DEV] Convite para %s | LINK: %s", email, invite_link
+                    )
                 else:
                     ResendService.send_invite_email(email, company_name, invite_link)
             except Exception as e:
-                print(f"!!! [BACKGROUND ERROR] Falha no disparo de e-mail: {str(e)} !!!")
+                logger.error("[TEAM] Falha no disparo de e-mail: %s", str(e))
 
         background_tasks.add_task(process_email_sending)
 
@@ -195,7 +194,7 @@ def invite_member(
         }
 
     except Exception as e:
-        print("!!! [CRITICAL ERROR] Falha no endpoint /invite !!!")
+        logger.error("[TEAM] Falha no endpoint /invite: %s", str(e))
         import traceback
         traceback.print_exc()
         if isinstance(e, HTTPException):
@@ -375,7 +374,7 @@ async def finalize_registration(
     user_id = data.get("usuario_id")
     nome = data.get("nome")
 
-    print(f">>> [TEAM] finalize_registration para user={user_id}, token={token[:8] if token else None}...")
+    logger.info("[TEAM] finalize_registration user=%s token=%s", user_id, token[:8] if token else None)
 
     try:
         # 1. Validações básicas
@@ -400,7 +399,7 @@ async def finalize_registration(
 
         if user:
             # CASO A: UUID já existe → atualiza só o nome (idempotente)
-            print(f"[FINALIZE] CASO A: UUID {user_uuid} já existe. Atualizando nome.")
+            logger.debug("[FINALIZE] CASO A: UUID %s já existe. Atualizando nome.", user_uuid)
             user.nome = nome
             user.is_active = True
             db.add(user)
@@ -413,7 +412,7 @@ async def finalize_registration(
                 # CASO B: Email existe com UUID diferente → migrar UUID via SQL raw
                 old_id = str(old_user.id)
                 new_id = str(user_uuid)
-                print(f"[FINALIZE] CASO B: Migrando UUID {old_id} → {new_id}")
+                logger.info("[FINALIZE] CASO B: Migrando UUID %s → %s", old_id, new_id)
 
                 # Atualiza tabelas filhas que referenciam usuarios.id
                 for child_table in ["usuario_empresas", "honorarios_contador", "trilha_auditoria_contador"]:
@@ -423,7 +422,7 @@ async def finalize_registration(
                         ).bindparams(new_id=new_id, old_id=old_id))
                     except Exception as te:
                         # Tabela pode não existir ainda — ignora silenciosamente
-                        print(f"[FINALIZE] Tabela {child_table}: {te} (ignorado)")
+                        logger.debug("[FINALIZE] Tabela %s: %s (ignorado)", child_table, te)
 
                 db.flush()
 
@@ -440,7 +439,7 @@ async def finalize_registration(
                     raise HTTPException(status_code=500, detail="Falha ao recuperar usuário após migração de UUID.")
             else:
                 # CASO C: Sem conflito → criar usuário novo
-                print(f"[FINALIZE] CASO C: Criando novo usuário {user_uuid}")
+                logger.debug("[FINALIZE] CASO C: Criando novo usuário %s", user_uuid)
                 user = User(
                     id=user_uuid,
                     email=invite.email,
@@ -474,10 +473,10 @@ async def finalize_registration(
         # 7. Auto-confirmação de e-mail em background (apenas em DEV)
         dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
         if dev_mode:
-            print(f"[AUTH ADMIN] Agendando confirmação de e-mail para: {invite.email}")
+            logger.info("[AUTH ADMIN] Agendando confirmação de e-mail para: %s", invite.email)
             background_tasks.add_task(confirm_supabase_email_direct, str(user_uuid))
 
-        print(f"[OK] Registro finalizado: {nome} (UUID: {user_uuid})")
+        logger.info("[FINALIZE] Registro finalizado: %s (UUID: %s)", nome, user_uuid)
         return {"message": "Cadastro finalizado com sucesso! Agora você pode fazer login."}
 
     except Exception as e:

@@ -1,9 +1,12 @@
+import logging
 import resend
 import os
 from typing import Dict, Any
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class ResendService:
     @staticmethod
@@ -15,7 +18,7 @@ class ResendService:
         env = os.getenv("ENVIRONMENT", "production")
 
         if not api_key or env == "development":
-            print(f"INFO: [E-MAIL SIMULADO] Destino: {to_email} | Link: {invite_link}")
+            logger.info("[RESEND] E-mail simulado para %s | Link: %s", to_email, invite_link)
             return {"status": "mocked", "message": "Development mode: E-mail logged to console."}
 
         resend.api_key = api_key
@@ -45,5 +48,5 @@ class ResendService:
             r = resend.Emails.send(params)
             return r
         except Exception as e:
-            print(f"Erro ao enviar e-mail via Resend: {str(e)}")
+            logger.error("[RESEND] Erro ao enviar e-mail via Resend: %s", str(e))
             return {"error": str(e)}

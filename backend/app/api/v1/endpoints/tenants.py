@@ -3,12 +3,15 @@ from sqlmodel import Session, select
 from uuid import UUID
 from datetime import datetime
 from typing import Dict, Any
+import logging
 
 from app.models.database import engine, Empresa, LogAuditoria, RegimeTributario, User, UsuarioEmpresa, UserRole
 from app.services.brasil_api import BrasilAPIService
 from app.schemas.tenants import TenantSetupSchema
 from app.core.auth import get_session
 from app.services.seeder import SeederService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -47,7 +50,7 @@ def setup_tenant(
         # Chame de forma síncrona ou use uma estratégia de fallback
         cnpj_info = {} # Simplificando para teste
     except Exception as e:
-        print(f'>>> [ALERTA] BrasilAPI falhou: {str(e)}')
+        logger.warning("[SETUP] BrasilAPI falhou: %s", str(e))
         cnpj_info = {}
 
     try:
@@ -137,29 +140,29 @@ def setup_tenant(
         else:
             segmento = "servicos"
             
-        print(f">>> [SETUP] Injetando Plano de Contas (Segmento: {segmento} / CNAE: {cnae})")
+        logger.info("[SETUP] Injetando Plano de Contas (Segmento: %s / CNAE: %s)", segmento, cnae)
         SeederService.seed_plano_contas(session=session, empresa_id=empresa.id, segmento=segmento)
         
-        print(f">>> [SETUP] Injetando Centros de Custo Básicos")
+        logger.info("[SETUP] Injetando Centros de Custo Básicos")
         SeederService.seed_centros_custo(session=session, empresa_id=empresa.id)
 
-        print(f">>> [SETUP] Injetando Formas de Pagamento Padrão")
+        logger.info("[SETUP] Injetando Formas de Pagamento Padrão")
         SeederService.seed_formas_pagamento(session=session, empresa_id=empresa.id)
 
-        print(f">>> [SETUP] Injetando Bandeiras de Cartão Padrão")
+        logger.info("[SETUP] Injetando Bandeiras de Cartão Padrão")
         SeederService.seed_bandeiras_cartao(session=session, empresa_id=empresa.id)
         
         # Commit Final da Transação
         session.commit()
 
-        print('>>> [DEBUG] ENVIANDO RESPOSTA FINAL PARA O FRONTEND')
+        logger.info("[SETUP] Empresa %s criada com sucesso", empresa.id)
         return {"status": "ok", "message": "created"}
 
     except Exception as e:
         session.rollback()
         import traceback
         error_msg = f"ERRO CRITICO NO SETUP: {str(e)}"
-        print(f">>> [ERRO] {error_msg}")
+        logger.error("[SETUP] %s", error_msg)
         traceback.print_exc()
         raise HTTPException(
             status_code=500,

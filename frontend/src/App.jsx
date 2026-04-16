@@ -18,6 +18,7 @@ import PlanoContas from './pages/Financeiro/PlanoContas';
 import RegrasContabeis from './pages/Financeiro/RegrasContabeis';
 import AplicacoesFinanceiras from './pages/Financeiro/AplicacoesFinanceiras';
 import Contador from './pages/Contador/Contador';
+import EmpresaDetalhe from './pages/Contador/EmpresaDetalhe';
 import Sidebar from './components/Layout/Sidebar';
 import QuickLaunchModal from './components/Financeiro/QuickLaunchModal';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -310,6 +311,12 @@ function AppContent() {
             <Route path="/contador" element={
               <ProtectedRoute>
                 <Contador />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/contador/empresa/:empresaId" element={
+              <ProtectedRoute>
+                <EmpresaDetalhe />
               </ProtectedRoute>
             } />
 

@@ -1,4 +1,5 @@
 # from __future__ import annotations
+import logging
 from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship, Column, JSON, create_engine, Session, select
 from sqlalchemy import Numeric, ForeignKey, Index, UniqueConstraint
@@ -12,6 +13,8 @@ from dotenv import load_dotenv
 from decimal import Decimal as PyDecimal
 
 load_dotenv(override=True)
+
+logger = logging.getLogger(__name__)
 
 # Lê do .env ou fallback para SQLite local
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./erp.db")
@@ -33,7 +36,7 @@ if "sqlite" not in DATABASE_URL:
     # Forçamos NullPool para qualquer conexão Supabase ou porta de pooling (6543)
     # Isso evita travamentos de conexão e melhora a resiliência em ambientes instáveis
     if any(x in DATABASE_URL for x in ["supabase.co", "pooler.supabase.com", ":6543"]):
-        print("--- [DATABASE] Usando NullPool para Supabase ---")
+        logger.info("[DATABASE] Usando NullPool para Supabase")
         engine_kwargs.update({
             "poolclass": NullPool
         })

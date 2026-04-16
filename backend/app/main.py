@@ -1,14 +1,21 @@
 from dotenv import load_dotenv
 load_dotenv(override=True)
+import logging
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from datetime import datetime
-from app.api.v1.endpoints import tenants, team, contador, financeiro, parceiros, accounting, aplicacoes, emprestimos
+from app.api.v1.endpoints import tenants, team, contador, financeiro, parceiros, accounting, aplicacoes, emprestimos, relatorios
 from app.core.middleware import get_empresa_id_middleware
 from app.models.database import create_db_and_tables
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Sistema ERP Modular - API",
@@ -21,13 +28,10 @@ def on_startup():
     import os
     # Verificar configuração crítica de segurança na inicialização
     if not os.getenv("SUPABASE_JWT_SECRET"):
-        print(
-            "\n"
-            "========================================================\n"
-            "[SECURITY WARNING] SUPABASE_JWT_SECRET não configurado.\n"
-            "Todas as rotas protegidas retornarão 503 Service Unavailable.\n"
-            "Configure SUPABASE_JWT_SECRET antes de usar em produção.\n"
-            "========================================================\n"
+        logger.warning(
+            "SUPABASE_JWT_SECRET não configurado. "
+            "Todas as rotas protegidas retornarão 503 Service Unavailable. "
+            "Configure SUPABASE_JWT_SECRET antes de usar em produção."
         )
     try:
         from app.models.database import create_db_and_tables
@@ -69,6 +73,7 @@ app.include_router(parceiros.router, prefix="/api/v1/parceiros", tags=["Gestão 
 app.include_router(accounting.router, prefix="/api/v1/accounting", tags=["Contabilidade"])
 app.include_router(aplicacoes.router, prefix="/api/v1/aplicacoes", tags=["Aplicações Financeiras"])
 app.include_router(emprestimos.router, prefix="/api/v1/emprestimos", tags=["Módulo Empréstimos"])
+app.include_router(relatorios.router, prefix="/api/v1/relatorios", tags=["Relatórios"])
 
 @app.get("/api/v1/health", tags=["Infra"])
 async def health_check():
@@ -93,5 +98,7 @@ if __name__ == "__main__":
     try:
         uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
     except Exception as e:
-        print(f"\n--- [ERRO CRÍTICO] Falha ao iniciar servidor: {e} ---")
+        import traceback
+        logger.critical("Falha ao iniciar servidor: %s", e)
+        traceback.print_exc()
         sys.exit(1)

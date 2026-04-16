@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Building2, ArrowRight, AlertTriangle, CheckCircle,
-  BookOpen, Landmark, RefreshCw, FileText, Wallet
+  BookOpen, Landmark, RefreshCw, FileText, Wallet, Search
 } from 'lucide-react';
 import { api, setTenantId } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,7 +25,7 @@ function PendenciasTag({ value, label }) {
   );
 }
 
-function EmpresaCard({ empresa, onEntrar }) {
+function EmpresaCard({ empresa, onEntrar, onDetalhe }) {
   const [pendencias, setPendencias] = useState(null);
   const [loadingPend, setLoadingPend] = useState(false);
 
@@ -105,13 +105,22 @@ function EmpresaCard({ empresa, onEntrar }) {
       </div>
 
       {/* Ação */}
-      <button
-        onClick={() => onEntrar(empresa)}
-        className="mt-auto w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl transition-colors shadow-md shadow-brand-primary/20 group"
-      >
-        Entrar na Empresa
-        <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-      </button>
+      <div className="mt-auto flex gap-2">
+        <button
+          onClick={() => onDetalhe(empresa)}
+          className="flex-1 flex items-center justify-center gap-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-widest py-2.5 rounded-xl transition-colors"
+        >
+          <FileText size={13} />
+          Detalhe
+        </button>
+        <button
+          onClick={() => onEntrar(empresa)}
+          className="flex-1 flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-black uppercase tracking-widest py-2.5 rounded-xl transition-colors shadow-md shadow-brand-primary/20 group"
+        >
+          Entrar
+          <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
+        </button>
+      </div>
     </motion.div>
   );
 }
@@ -124,6 +133,7 @@ export default function Contador() {
   const [error, setError] = useState(null);
   const [switching, setSwitching] = useState(null);
   const [switchError, setSwitchError] = useState(null);
+  const [search, setSearch] = useState('');
 
   const fetchEmpresas = useCallback(async () => {
     setLoading(true);
@@ -162,6 +172,20 @@ export default function Contador() {
     }
   };
 
+  const handleDetalhe = (empresa) => {
+    navigate(`/contador/empresa/${empresa.id}`);
+  };
+
+  const empresasFiltradas = empresas.filter((e) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (e.razao_social || '').toLowerCase().includes(q) ||
+      (e.nome_fantasia || '').toLowerCase().includes(q) ||
+      (e.cnpj || '').includes(q)
+    );
+  });
+
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header */}
@@ -187,6 +211,20 @@ export default function Contador() {
           Atualizar
         </button>
       </div>
+
+      {/* Busca */}
+      {!loading && !error && empresas.length > 0 && (
+        <div className="mb-5 relative">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar empresa por nome ou CNPJ..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand-primary/40 transition-colors"
+          />
+        </div>
+      )}
 
       {/* Estado de carregamento */}
       {loading && (
@@ -239,10 +277,10 @@ export default function Contador() {
       {!loading && !error && empresas.length > 0 && (
         <>
           <p className="text-xs text-slate-500 mb-4 font-medium">
-            {empresas.length} {empresas.length === 1 ? 'empresa vinculada' : 'empresas vinculadas'}
+            {empresasFiltradas.length} {empresasFiltradas.length === 1 ? 'empresa' : 'empresas'} {search ? 'encontrada(s)' : 'vinculada(s)'}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {empresas.map((empresa) => (
+            {empresasFiltradas.map((empresa) => (
               <div key={empresa.id} className="relative">
                 {switching === empresa.id && (
                   <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-2xl flex items-center justify-center z-10">
@@ -252,7 +290,7 @@ export default function Contador() {
                     </div>
                   </div>
                 )}
-                <EmpresaCard empresa={empresa} onEntrar={handleEntrar} />
+                <EmpresaCard empresa={empresa} onEntrar={handleEntrar} onDetalhe={handleDetalhe} />
               </div>
             ))}
           </div>

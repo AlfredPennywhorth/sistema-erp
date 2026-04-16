@@ -1,28 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from uuid import UUID
-from enum import Enum
-from decimal import Decimal
 from datetime import datetime, date
+from decimal import Decimal
 from app.models.database import (
     NaturezaFinanceira, TipoLancamento, StatusLancamento, TipoEventoContabil,
-    TipoContaBancaria, TipoFormaPagamento, TipoOperacaoPagamento, StatusFatura
+    TipoContaBancaria, TipoFormaPagamento, TipoOperacaoPagamento, StatusFatura,
+    NaturezaConta, TipoConta, TipoCentroCusto,
 )
-# Enums (replicados dos models para typing ou importados)
-class NaturezaConta(str, Enum):
-    DEVEDORA = "DEVEDORA"
-    CREDORA = "CREDORA"
-
-class TipoConta(str, Enum):
-    ATIVO = "ATIVO"
-    PASSIVO = "PASSIVO"
-    RECEITA = "RECEITA"
-    DESPESA = "DESPESA"
-    PATRIMONIO = "PATRIMONIO"
-
-class TipoCentroCusto(str, Enum):
-    SINTETICO = "SINTETICO"
-    ANALITICO = "ANALITICO"
 
 # --- Banco ---
 class BancoBase(BaseModel):

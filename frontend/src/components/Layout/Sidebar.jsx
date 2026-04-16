@@ -17,7 +17,8 @@ import {
   Building2,
   ArrowLeftRight,
   BookOpen,
-  Banknote
+  Banknote,
+  Calculator
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -28,7 +29,7 @@ const Sidebar = () => {
   const navigate = useNavigate();
 
   const mainMenuItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Início', path: '/' },
+    { icon: <LayoutDashboard size={20} />, label: 'Início', path: '/dashboard' },
   ];
 
   const operationalFinanceItems = [
@@ -50,6 +51,12 @@ const Sidebar = () => {
       label: 'Regras Contábeis', 
       path: '/financeiro/regras-contabeis',
       allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER']
+    },
+    {
+      icon: <Calculator size={20} />,
+      label: 'Portal Contador',
+      path: '/contador',
+      allowedRoles: ['CONTADOR'],
     },
   ];
 

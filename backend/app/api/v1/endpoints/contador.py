@@ -5,106 +5,165 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.models.database import (
-    engine, Empresa, UsuarioEmpresa, UserRole, 
-    HonorariosContador, TrilhaAuditoriaContador, SegmentoMercado,
-    StatusPagamento
+    Empresa, UsuarioEmpresa, UserRole,
+    HonorariosContador, TrilhaAuditoriaContador,
+    LancamentoFinanceiro, StatusLancamento,
+    ContaBancaria, RegraContabil, StatusPagamento,
+    SegmentoMercado,
+)
+from app.schemas.contador import (
+    EmpresaContadorRead,
+    SwitchContextPayload,
+    HonorariosContadorCreate,
+    HonorariosContadorRead,
+    PendenciasEmpresaRead,
 )
 from app.core.auth import get_session
 
 router = APIRouter()
 
-@router.get("/empresas", response_model=List[Empresa])
+
+def _require_user(request: Request) -> UUID:
+    """Extrai e valida o user_id do estado da requisição."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou ausente."
+        )
+    try:
+        return UUID(str(user_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identidade do usuário inválida."
+        )
+
+
+def _require_contador_access(user_uuid: UUID, empresa_id: UUID, db: Session) -> UsuarioEmpresa:
+    """Verifica que o usuário é CONTADOR com vínculo ativo à empresa."""
+    vinculo = db.exec(
+        select(UsuarioEmpresa).where(
+            UsuarioEmpresa.usuario_id == user_uuid,
+            UsuarioEmpresa.empresa_id == empresa_id,
+            UsuarioEmpresa.role == UserRole.CONTADOR,
+            UsuarioEmpresa.ativo == True,
+        )
+    ).first()
+    if not vinculo:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para acessar esta empresa."
+        )
+    return vinculo
+
+
+@router.get("/empresas", response_model=List[EmpresaContadorRead])
 async def list_vinculos_contador(
     request: Request,
     db: Session = Depends(get_session)
 ):
-    """
-    Retorna a lista de empresas vinculadas ao contador ativo.
-    """
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido ou ausente.")
-    try:
-        user_uuid = UUID(str(user_id))
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identidade do usuário inválida.")
+    """Retorna a lista de empresas vinculadas ao contador autenticado."""
+    user_uuid = _require_user(request)
 
-    # Busca vínculos N:N onde o usuário é Auditor/Contador
-    stmt = select(Empresa).join(UsuarioEmpresa).where(
-        UsuarioEmpresa.usuario_id == user_uuid,
-        UsuarioEmpresa.role == UserRole.CONTADOR,
-        UsuarioEmpresa.ativo == True
+    stmt = (
+        select(Empresa)
+        .join(UsuarioEmpresa)
+        .where(
+            UsuarioEmpresa.usuario_id == user_uuid,
+            UsuarioEmpresa.role == UserRole.CONTADOR,
+            UsuarioEmpresa.ativo == True,
+        )
     )
     return db.exec(stmt).all()
 
+
 @router.post("/switch-context")
 async def switch_tenant_context(
+    payload: SwitchContextPayload,
     request: Request,
-    empresa_id: UUID,
     db: Session = Depends(get_session)
 ):
-    """
-    Registra a alternância de contexto na trilha de auditoria.
-    """
-    user_id = getattr(request.state, "user_id", None)
-    try:
-        user_uuid = UUID(str(user_id)) if user_id else None
-    except ValueError:
-        user_uuid = None
+    """Registra a alternância de contexto na trilha de auditoria."""
+    user_uuid = _require_user(request)
+    _require_contador_access(user_uuid, payload.empresa_id, db)
 
-    # Validar se o contador tem acesso a esta empresa
-    check = db.exec(select(UsuarioEmpresa).where(
-        UsuarioEmpresa.usuario_id == user_uuid,
-        UsuarioEmpresa.empresa_id == empresa_id,
-        UsuarioEmpresa.role == UserRole.CONTADOR
-    )).first()
-
-    if not check:
-        raise HTTPException(status_code=403, detail="Você não tem permissão para acessar esta empresa.")
-
-    # Registrar log de auditoria
     log = TrilhaAuditoriaContador(
         usuario_id=user_uuid,
-        empresa_id=empresa_id,
+        empresa_id=payload.empresa_id,
         acao="ALTERNANCIA_CONTEXTO",
         detalhes={"timestamp": datetime.now().isoformat()}
     )
     db.add(log)
     db.commit()
-    
-    return {"status": "success", "message": f"Contexto alterado para empresa {empresa_id}"}
+
+    return {"status": "success", "message": f"Contexto alterado para empresa {payload.empresa_id}"}
+
+
+@router.get("/empresas/{empresa_id}/pendencias", response_model=PendenciasEmpresaRead)
+async def get_pendencias_empresa(
+    empresa_id: UUID,
+    request: Request,
+    db: Session = Depends(get_session)
+):
+    """Retorna pendências contábeis/financeiras básicas para uma empresa vinculada."""
+    user_uuid = _require_user(request)
+    _require_contador_access(user_uuid, empresa_id, db)
+
+    lancamentos_abertos = db.exec(
+        select(func.count(LancamentoFinanceiro.id)).where(
+            LancamentoFinanceiro.empresa_id == empresa_id,
+            LancamentoFinanceiro.status == StatusLancamento.ABERTO,
+        )
+    ).one()
+
+    contas_sem_vinculo = db.exec(
+        select(func.count(ContaBancaria.id)).where(
+            ContaBancaria.empresa_id == empresa_id,
+            ContaBancaria.ativo == True,
+            ContaBancaria.conta_contabil_id.is_(None),
+        )
+    ).one()
+
+    total_regras = db.exec(
+        select(func.count(RegraContabil.id)).where(
+            RegraContabil.empresa_id == empresa_id,
+            RegraContabil.ativo == True,
+        )
+    ).one()
+
+    return PendenciasEmpresaRead(
+        empresa_id=empresa_id,
+        lancamentos_abertos=lancamentos_abertos,
+        contas_sem_vinculo_contabil=contas_sem_vinculo,
+        total_regras_contabeis=total_regras,
+    )
+
 
 @router.get("/dashboard-metrics")
 async def get_dashboard_metrics(
     request: Request,
     db: Session = Depends(get_session)
 ):
-    """
-    Retorna métricas agregadas das empresas vinculadas.
-    """
-    user_id = getattr(request.state, "user_id", None)
-    try:
-        user_uuid = UUID(str(user_id)) if user_id else None
-    except ValueError:
-        user_uuid = None
+    """Retorna métricas agregadas das empresas vinculadas ao contador."""
+    user_uuid = _require_user(request)
 
-    # 1. Pegar IDs das empresas permitidas
-    vinculos = db.exec(select(UsuarioEmpresa.empresa_id).where(
-        UsuarioEmpresa.usuario_id == user_uuid,
-        UsuarioEmpresa.role == UserRole.CONTADOR
-    )).all()
-    
+    vinculos = db.exec(
+        select(UsuarioEmpresa.empresa_id).where(
+            UsuarioEmpresa.usuario_id == user_uuid,
+            UsuarioEmpresa.role == UserRole.CONTADOR,
+        )
+    ).all()
+
     if not vinculos:
         return {"fiscal_distribution": [], "segment_distribution": []}
 
-    # 2. Agregação por Regime Tributário
     fiscal_stats = db.exec(
         select(Empresa.classificacao_fiscal, func.count(Empresa.id))
         .where(Empresa.id.in_(vinculos))
         .group_by(Empresa.classificacao_fiscal)
     ).all()
-    
-    # 3. Agregação por Segmento de Mercado
+
     segment_stats = db.exec(
         select(SegmentoMercado.nome, func.count(Empresa.id))
         .join(Empresa, Empresa.segmento_mercado_id == SegmentoMercado.id)
@@ -113,39 +172,57 @@ async def get_dashboard_metrics(
     ).all()
 
     return {
-        "fiscal_distribution": [{"label": item[0], "value": item[1]} for item in fiscal_stats if item[0]],
-        "segment_distribution": [{"label": item[0], "value": item[1]} for item in segment_stats]
+        "fiscal_distribution": [
+            {"label": item[0], "value": item[1]} for item in fiscal_stats if item[0]
+        ],
+        "segment_distribution": [
+            {"label": item[0], "value": item[1]} for item in segment_stats
+        ],
     }
 
-@router.get("/honorarios", response_model=List[HonorariosContador])
+
+@router.get("/honorarios", response_model=List[HonorariosContadorRead])
 async def list_honorarios(
     request: Request,
-    status_filtro: Optional[StatusPagamento] = None,
+    status_filtro: Optional[str] = None,
     db: Session = Depends(get_session)
 ):
-    user_id = getattr(request.state, "user_id", None)
-    try:
-        user_uuid = UUID(str(user_id)) if user_id else None
-    except ValueError:
-        user_uuid = None
-    stmt = select(HonorariosContador).where(HonorariosContador.usuario_id == user_uuid)
+    """Lista os honorários do contador autenticado."""
+    user_uuid = _require_user(request)
+
+    stmt = select(HonorariosContador).where(
+        HonorariosContador.usuario_id == user_uuid
+    )
     if status_filtro:
-        stmt = stmt.where(HonorariosContador.status_pagamento == status_filtro)
-    
+        try:
+            status_enum = StatusPagamento(status_filtro)
+            stmt = stmt.where(HonorariosContador.status_pagamento == status_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Status inválido: {status_filtro}"
+            )
+
     return db.exec(stmt).all()
 
-@router.post("/honorarios", response_model=HonorariosContador)
+
+@router.post("/honorarios", response_model=HonorariosContadorRead, status_code=status.HTTP_201_CREATED)
 async def create_honorario(
-    honorario: HonorariosContador,
+    honorario_in: HonorariosContadorCreate,
     request: Request,
     db: Session = Depends(get_session)
 ):
-    user_id = getattr(request.state, "user_id", None)
-    try:
-        user_uuid = UUID(str(user_id)) if user_id else None
-    except ValueError:
-        user_uuid = None
-    honorario.usuario_id = user_uuid
+    """Registra um honorário para o contador autenticado."""
+    user_uuid = _require_user(request)
+    _require_contador_access(user_uuid, honorario_in.empresa_id, db)
+
+    honorario = HonorariosContador(
+        usuario_id=user_uuid,
+        empresa_id=honorario_in.empresa_id,
+        valor=honorario_in.valor,
+        data_vencimento=honorario_in.data_vencimento,
+        observacoes=honorario_in.observacoes,
+    )
     db.add(honorario)
     db.commit()
     db.refresh(honorario)

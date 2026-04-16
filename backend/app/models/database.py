@@ -191,6 +191,26 @@ class StatusParcela(str, Enum):
     ATRASADA = "ATRASADA"
     CANCELADA = "CANCELADA"
 
+class TipoAplicacaoFinanceira(str, Enum):
+    CDB = "CDB"
+    LCI = "LCI"
+    LCA = "LCA"
+    POUPANCA = "POUPANCA"
+    TESOURO_DIRETO = "TESOURO_DIRETO"
+    FUNDO_INVESTIMENTO = "FUNDO_INVESTIMENTO"
+    DEBENTURE = "DEBENTURE"
+    OUTROS = "OUTROS"
+
+class StatusAplicacaoFinanceira(str, Enum):
+    ATIVA = "ATIVA"
+    RESGATADA = "RESGATADA"
+    VENCIDA = "VENCIDA"
+    CANCELADA = "CANCELADA"
+
+class TipoResgate(str, Enum):
+    PARCIAL = "PARCIAL"
+    TOTAL = "TOTAL"
+
 # --- MODELS ---
 
 class User(SQLModel, table=True):
@@ -585,6 +605,91 @@ class ParcelaEmprestimo(FullAuditMixin, table=True):
     usuario_liquidacao_id: Optional[UUID] = Field(default=None, foreign_key="usuarios.id")
 
     emprestimo: "Emprestimo" = Relationship(back_populates="parcelas")
+
+class AplicacaoFinanceira(FullAuditMixin, table=True):
+    """
+    Entidade de aplicação financeira — completamente separada do caixa operacional.
+    O saldo_atual aqui representa o valor corrente da aplicação, NÃO o saldo bancário.
+    """
+    __tablename__ = "aplicacoes_financeiras"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+
+    # Vínculos operacionais
+    conta_bancaria_origem_id: UUID = Field(foreign_key="contas_bancarias.id", index=True)
+
+    # Descrição
+    nome: str = Field(max_length=255)
+    tipo: TipoAplicacaoFinanceira = Field(default=TipoAplicacaoFinanceira.CDB)
+    instituicao: Optional[str] = Field(default=None, max_length=255)
+    numero_contrato: Optional[str] = Field(default=None, max_length=100)
+
+    # Valores (ISOLADOS do saldo bancário)
+    valor_aplicado: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    saldo_atual: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    rendimento_total: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    taxa_rendimento: Optional[PyDecimal] = Field(default=None, sa_type=Numeric(precision=10, scale=6))
+
+    # Datas
+    data_aplicacao: date = Field(index=True)
+    data_vencimento: Optional[date] = Field(default=None, index=True)
+    data_resgate: Optional[date] = Field(default=None)
+
+    # Vínculo contábil obrigatório (segregação de contas)
+    conta_contabil_aplicacao_id: UUID = Field(foreign_key="plano_contas.id")   # ATIVO
+    conta_contabil_receita_id: UUID = Field(foreign_key="plano_contas.id")     # RECEITA de rendimentos
+    conta_contabil_despesa_id: UUID = Field(foreign_key="plano_contas.id")     # DESPESA de IR/IOF
+
+    # Governança
+    status: StatusAplicacaoFinanceira = Field(default=StatusAplicacaoFinanceira.ATIVA, index=True)
+    observacoes: Optional[str] = Field(default=None)
+    usuario_criacao_id: UUID = Field(foreign_key="usuarios.id")
+
+    # Relacionamentos
+    rendimentos: List["RendimentoAplicacao"] = Relationship(back_populates="aplicacao", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    resgates: List["ResgateAplicacao"] = Relationship(back_populates="aplicacao", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+
+
+class RendimentoAplicacao(FullAuditMixin, table=True):
+    """Registro de cada evento de rendimento/atualização de saldo da aplicação."""
+    __tablename__ = "rendimentos_aplicacao"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    aplicacao_id: UUID = Field(foreign_key="aplicacoes_financeiras.id", index=True)
+
+    data_rendimento: date = Field(index=True)
+    valor_rendimento: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    saldo_antes: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    saldo_depois: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    observacoes: Optional[str] = Field(default=None)
+    usuario_id: UUID = Field(foreign_key="usuarios.id")
+
+    aplicacao: "AplicacaoFinanceira" = Relationship(back_populates="rendimentos")
+
+
+class ResgateAplicacao(FullAuditMixin, table=True):
+    """Registro de resgate (parcial ou total) de uma aplicação financeira."""
+    __tablename__ = "resgates_aplicacao"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    aplicacao_id: UUID = Field(foreign_key="aplicacoes_financeiras.id", index=True)
+
+    tipo: TipoResgate = Field(default=TipoResgate.TOTAL)
+    data_resgate: date = Field(index=True)
+
+    # Valores do resgate
+    valor_bruto: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    ir_retido: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    iof_retido: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    valor_liquido: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+
+    # Conta bancária que recebe o crédito do resgate
+    conta_bancaria_destino_id: UUID = Field(foreign_key="contas_bancarias.id")
+
+    observacoes: Optional[str] = Field(default=None)
+    usuario_id: UUID = Field(foreign_key="usuarios.id")
+
+    aplicacao: "AplicacaoFinanceira" = Relationship(back_populates="resgates")
 
 
 # --- DATABASE SETUP ---

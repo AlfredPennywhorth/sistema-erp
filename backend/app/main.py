@@ -12,7 +12,7 @@ from app.core.middleware import get_empresa_id_middleware
 from app.models.database import create_db_and_tables
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)

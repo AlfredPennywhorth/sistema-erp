@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select, func
 from uuid import UUID
@@ -26,6 +27,16 @@ from app.core.auth import get_session
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _to_dec(value) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    return Decimal(str(value))
+
+
+def _round2(value: Decimal) -> float:
+    return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _require_user(request: Request) -> UUID:
@@ -257,30 +268,30 @@ async def get_resumo_empresa(
     today = date.today()
 
     # Saldo bancário total (soma de todas as contas ativas)
-    saldo_bancario = db.exec(
+    saldo_bancario = _to_dec(db.exec(
         select(func.coalesce(func.sum(ContaBancaria.saldo_atual), 0)).where(
             ContaBancaria.empresa_id == empresa_id,
             ContaBancaria.ativo == True,
         )
-    ).one()
+    ).one())
 
     # Contas a pagar em aberto
-    total_pagar = db.exec(
+    total_pagar = _to_dec(db.exec(
         select(func.coalesce(func.sum(LancamentoFinanceiro.valor_previsto), 0)).where(
             LancamentoFinanceiro.empresa_id == empresa_id,
             LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
             LancamentoFinanceiro.status == StatusLancamento.ABERTO,
         )
-    ).one()
+    ).one())
 
     # Contas a receber em aberto
-    total_receber = db.exec(
+    total_receber = _to_dec(db.exec(
         select(func.coalesce(func.sum(LancamentoFinanceiro.valor_previsto), 0)).where(
             LancamentoFinanceiro.empresa_id == empresa_id,
             LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
             LancamentoFinanceiro.status == StatusLancamento.ABERTO,
         )
-    ).one()
+    ).one())
 
     # Regras contábeis ativas
     total_regras = db.exec(
@@ -318,7 +329,7 @@ async def get_resumo_empresa(
 
     # Fluxo do mês corrente (entradas - saídas já liquidadas)
     primeiro_dia_mes = today.replace(day=1)
-    entradas_mes = db.exec(
+    entradas_mes = _to_dec(db.exec(
         select(func.coalesce(func.sum(LancamentoFinanceiro.valor_pago), 0)).where(
             LancamentoFinanceiro.empresa_id == empresa_id,
             LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
@@ -326,9 +337,9 @@ async def get_resumo_empresa(
             LancamentoFinanceiro.data_pagamento >= primeiro_dia_mes,
             LancamentoFinanceiro.data_pagamento <= today,
         )
-    ).one()
+    ).one())
 
-    saidas_mes = db.exec(
+    saidas_mes = _to_dec(db.exec(
         select(func.coalesce(func.sum(LancamentoFinanceiro.valor_pago), 0)).where(
             LancamentoFinanceiro.empresa_id == empresa_id,
             LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
@@ -336,21 +347,21 @@ async def get_resumo_empresa(
             LancamentoFinanceiro.data_pagamento >= primeiro_dia_mes,
             LancamentoFinanceiro.data_pagamento <= today,
         )
-    ).one()
+    ).one())
 
     return {
         "empresa_id": str(empresa_id),
-        "saldo_bancario_total": float(saldo_bancario or 0),
-        "contas_a_pagar": float(total_pagar or 0),
-        "contas_a_receber": float(total_receber or 0),
+        "saldo_bancario_total": _round2(saldo_bancario),
+        "contas_a_pagar": _round2(total_pagar),
+        "contas_a_receber": _round2(total_receber),
         "total_regras_contabeis": total_regras,
         "lancamentos_abertos": lancamentos_abertos,
         "lancamentos_vencidos": lancamentos_vencidos,
         "contas_sem_vinculo_contabil": contas_sem_vinculo,
         "fluxo_mes_corrente": {
-            "entradas": float(entradas_mes or 0),
-            "saidas": float(saidas_mes or 0),
-            "saldo": float((entradas_mes or 0) - (saidas_mes or 0)),
+            "entradas": _round2(entradas_mes),
+            "saidas": _round2(saidas_mes),
+            "saldo": _round2(entradas_mes - saidas_mes),
         },
     }
 

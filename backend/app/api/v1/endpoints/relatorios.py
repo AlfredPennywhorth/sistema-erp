@@ -8,8 +8,9 @@ Fornece dados reais e filtráveis para as análises gerenciais:
 """
 
 import logging
-from datetime import date, timedelta
-from decimal import Decimal
+from collections import defaultdict
+from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Optional
 from uuid import UUID
 
@@ -36,6 +37,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _to_dec(value) -> Decimal:
+    """Converte valores do banco para Decimal com segurança."""
+    if value is None:
+        return Decimal("0")
+    return Decimal(str(value))
+
+
+def _round2(value: Decimal) -> float:
+    """Arredonda para 2 casas decimais e converte para float para serialização."""
+    return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 # ---------------------------------------------------------------------------
 # A.1 — Fluxo de Caixa
 # ---------------------------------------------------------------------------
@@ -51,6 +64,7 @@ def get_fluxo_caixa(
     Relatório de Fluxo de Caixa.
     Retorna entradas e saídas agrupadas por mês e o saldo acumulado.
     Baseado apenas em lançamentos com status PAGO/CONCILIADO (regime de caixa).
+    Agrupamento feito em Python para compatibilidade entre SQLite e PostgreSQL.
     """
     today = date.today()
     inicio = data_inicio or date(today.year, 1, 1)
@@ -60,76 +74,60 @@ def get_fluxo_caixa(
 
     statuses_pagos = [StatusLancamento.PAGO, StatusLancamento.CONCILIADO]
 
-    # Entradas por mês
-    stmt_entradas = (
+    rows = session.exec(
         select(
-            func.strftime("%Y-%m", LancamentoFinanceiro.data_pagamento).label("mes"),
-            func.sum(LancamentoFinanceiro.valor_pago).label("total"),
-        )
-        .where(
+            LancamentoFinanceiro.natureza,
+            LancamentoFinanceiro.data_pagamento,
+            LancamentoFinanceiro.valor_pago,
+        ).where(
             LancamentoFinanceiro.empresa_id == tenant_id,
-            LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
             LancamentoFinanceiro.status.in_(statuses_pagos),
             LancamentoFinanceiro.data_pagamento >= inicio,
             LancamentoFinanceiro.data_pagamento <= fim,
         )
-        .group_by(func.strftime("%Y-%m", LancamentoFinanceiro.data_pagamento))
-        .order_by(func.strftime("%Y-%m", LancamentoFinanceiro.data_pagamento))
-    )
+    ).all()
 
-    # Saídas por mês
-    stmt_saidas = (
-        select(
-            func.strftime("%Y-%m", LancamentoFinanceiro.data_pagamento).label("mes"),
-            func.sum(LancamentoFinanceiro.valor_pago).label("total"),
-        )
-        .where(
-            LancamentoFinanceiro.empresa_id == tenant_id,
-            LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
-            LancamentoFinanceiro.status.in_(statuses_pagos),
-            LancamentoFinanceiro.data_pagamento >= inicio,
-            LancamentoFinanceiro.data_pagamento <= fim,
-        )
-        .group_by(func.strftime("%Y-%m", LancamentoFinanceiro.data_pagamento))
-        .order_by(func.strftime("%Y-%m", LancamentoFinanceiro.data_pagamento))
-    )
+    entradas_map: dict[str, Decimal] = defaultdict(Decimal)
+    saidas_map: dict[str, Decimal] = defaultdict(Decimal)
 
-    entradas_raw = session.exec(stmt_entradas).all()
-    saidas_raw = session.exec(stmt_saidas).all()
+    for natureza, data_pag, valor in rows:
+        if data_pag is None:
+            continue
+        mes_key = data_pag.strftime("%Y-%m")
+        v = _to_dec(valor)
+        if natureza == NaturezaFinanceira.RECEBER:
+            entradas_map[mes_key] += v
+        else:
+            saidas_map[mes_key] += v
 
-    entradas_map = {r[0]: float(r[1] or 0) for r in entradas_raw}
-    saidas_map = {r[0]: float(r[1] or 0) for r in saidas_raw}
-
-    # Consolidar todos os meses presentes nos dados
     todos_meses = sorted(set(list(entradas_map.keys()) + list(saidas_map.keys())))
 
     meses = []
-    saldo_acumulado = 0.0
+    saldo_acumulado = Decimal("0")
     for mes in todos_meses:
-        entradas = entradas_map.get(mes, 0.0)
-        saidas = saidas_map.get(mes, 0.0)
+        entradas = entradas_map.get(mes, Decimal("0"))
+        saidas = saidas_map.get(mes, Decimal("0"))
         saldo_mes = entradas - saidas
         saldo_acumulado += saldo_mes
         meses.append(
             {
                 "mes": mes,
-                "entradas": round(entradas, 2),
-                "saidas": round(saidas, 2),
-                "saldo_mes": round(saldo_mes, 2),
-                "saldo_acumulado": round(saldo_acumulado, 2),
+                "entradas": _round2(entradas),
+                "saidas": _round2(saidas),
+                "saldo_mes": _round2(saldo_mes),
+                "saldo_acumulado": _round2(saldo_acumulado),
             }
         )
 
-    # Totais gerais do período
-    total_entradas = sum(m["entradas"] for m in meses)
-    total_saidas = sum(m["saidas"] for m in meses)
+    total_entradas = sum(entradas_map.values(), Decimal("0"))
+    total_saidas = sum(saidas_map.values(), Decimal("0"))
 
     return {
         "periodo": {"inicio": str(inicio), "fim": str(fim)},
         "totais": {
-            "entradas": round(total_entradas, 2),
-            "saidas": round(total_saidas, 2),
-            "saldo_liquido": round(total_entradas - total_saidas, 2),
+            "entradas": _round2(total_entradas),
+            "saidas": _round2(total_saidas),
+            "saldo_liquido": _round2(total_entradas - total_saidas),
         },
         "meses": meses,
     }
@@ -141,8 +139,8 @@ def get_fluxo_caixa(
 
 @router.get("/contas-pagar-receber")
 def get_contas_pagar_receber(
-    data_inicio: Optional[date] = Query(None, description="Data de vencimento inicial (para liquidados)"),
-    data_fim: Optional[date] = Query(None, description="Data de vencimento final (para liquidados)"),
+    data_inicio: Optional[date] = Query(None, description="Data de pagamento inicial (para liquidados)"),
+    data_fim: Optional[date] = Query(None, description="Data de pagamento final (para liquidados)"),
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session),
 ):
@@ -156,29 +154,26 @@ def get_contas_pagar_receber(
 
     logger.info("[RELATORIOS] contas-pagar-receber tenant=%s periodo=%s a %s", tenant_id, inicio, fim)
 
-    def _totais(natureza: NaturezaFinanceira):
-        # Em aberto (não vencido)
-        em_aberto = session.exec(
+    def _totais(natureza: NaturezaFinanceira) -> dict:
+        em_aberto = _to_dec(session.exec(
             select(func.coalesce(func.sum(LancamentoFinanceiro.valor_previsto), 0)).where(
                 LancamentoFinanceiro.empresa_id == tenant_id,
                 LancamentoFinanceiro.natureza == natureza,
                 LancamentoFinanceiro.status == StatusLancamento.ABERTO,
                 LancamentoFinanceiro.data_vencimento >= today,
             )
-        ).one()
+        ).one())
 
-        # Vencidos (em aberto e com vencimento passado)
-        vencidos = session.exec(
+        vencidos = _to_dec(session.exec(
             select(func.coalesce(func.sum(LancamentoFinanceiro.valor_previsto), 0)).where(
                 LancamentoFinanceiro.empresa_id == tenant_id,
                 LancamentoFinanceiro.natureza == natureza,
                 LancamentoFinanceiro.status == StatusLancamento.ABERTO,
                 LancamentoFinanceiro.data_vencimento < today,
             )
-        ).one()
+        ).one())
 
-        # Liquidados no período
-        liquidados = session.exec(
+        liquidados = _to_dec(session.exec(
             select(func.coalesce(func.sum(LancamentoFinanceiro.valor_pago), 0)).where(
                 LancamentoFinanceiro.empresa_id == tenant_id,
                 LancamentoFinanceiro.natureza == natureza,
@@ -186,9 +181,8 @@ def get_contas_pagar_receber(
                 LancamentoFinanceiro.data_pagamento >= inicio,
                 LancamentoFinanceiro.data_pagamento <= fim,
             )
-        ).one()
+        ).one())
 
-        # Resumo em aberto (últimos lançamentos)
         abertos_lista = session.exec(
             select(
                 LancamentoFinanceiro.id,
@@ -207,14 +201,14 @@ def get_contas_pagar_receber(
         ).all()
 
         return {
-            "em_aberto": float(em_aberto or 0),
-            "vencidos": float(vencidos or 0),
-            "liquidados_no_periodo": float(liquidados or 0),
+            "em_aberto": _round2(em_aberto),
+            "vencidos": _round2(vencidos),
+            "liquidados_no_periodo": _round2(liquidados),
             "proximos_vencimentos": [
                 {
                     "id": str(r[0]),
                     "descricao": r[1],
-                    "valor": float(r[2] or 0),
+                    "valor": _round2(_to_dec(r[2])),
                     "data_vencimento": str(r[3]),
                     "status": r[4],
                 }

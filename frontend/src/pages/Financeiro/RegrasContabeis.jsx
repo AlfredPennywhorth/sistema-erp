@@ -32,7 +32,9 @@ const RegrasContabeis = () => {
     { value: 'DESPESA_CONSUMO', label: 'Despesa de Consumo' },
     { value: 'ADIANTAMENTO_CLIENTE', label: 'Adiantamento de Cliente' },
     { value: 'ADIANTAMENTO_FORNECEDOR', label: 'Adiantamento a Fornecedor' },
-    { value: 'TRANSFERENCIA_INTERNA', label: 'Transferência Interna' }
+    { value: 'TRANSFERENCIA_INTERNA', label: 'Transferência Interna' },
+    { value: 'CONTRATACAO_EMPRESTIMO', label: 'Contratação de Empréstimo' },
+    { value: 'PAGAMENTO_PARCELA_EMPRESTIMO', label: 'Pagamento de Parcela de Empréstimo' },
   ];
 
   const naturezas = [

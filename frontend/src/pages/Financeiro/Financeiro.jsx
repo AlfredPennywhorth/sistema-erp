@@ -9,9 +9,10 @@ import FaturasCartao from './FaturasCartao';
 function ContasBancarias() {
   const [contas, setContas] = useState([]);
   const [bancos, setBancos] = useState([]);
+  const [planoContas, setPlanoContas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ id: null, banco_id: '', nome: '', agencia: '', conta: '', saldo_inicial: 0 });
+  const [formData, setFormData] = useState({ id: null, banco_id: '', nome: '', agencia: '', conta: '', saldo_inicial: 0, conta_contabil_id: '' });
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingBanco, setIsAddingBanco] = useState(false);
   const [newBanco, setNewBanco] = useState({ codigo_bacen: '', nome: '' });
@@ -23,12 +24,14 @@ function ContasBancarias() {
   async function fetchDados() {
     setLoading(true);
     try {
-      const [contasData, bancosData] = await Promise.all([
+      const [contasData, bancosData, planoData] = await Promise.all([
         FinanceiroAPI.getContasBancarias(),
-        FinanceiroAPI.getBancos()
+        FinanceiroAPI.getBancos(),
+        FinanceiroAPI.getPlanoContas()
       ]);
       setContas(contasData);
       setBancos(bancosData);
+      setPlanoContas(planoData.filter(c => c.is_analitica && c.ativo));
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
     } finally {
@@ -44,11 +47,12 @@ function ContasBancarias() {
         nome: conta.nome, 
         agencia: conta.agencia, 
         conta: conta.conta, 
-        saldo_inicial: conta.saldo_inicial 
+        saldo_inicial: conta.saldo_inicial,
+        conta_contabil_id: conta.conta_contabil_id || ''
       });
       setIsEditing(true);
     } else {
-      setFormData({ id: null, banco_id: bancos.length > 0 ? bancos[0].id : '', nome: '', agencia: '', conta: '', saldo_inicial: 0 });
+      setFormData({ id: null, banco_id: bancos.length > 0 ? bancos[0].id : '', nome: '', agencia: '', conta: '', saldo_inicial: 0, conta_contabil_id: '' });
       setIsEditing(false);
     }
     setIsModalOpen(true);
@@ -56,7 +60,7 @@ function ContasBancarias() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setFormData({ id: null, banco_id: '', nome: '', agencia: '', conta: '', saldo_inicial: 0 });
+    setFormData({ id: null, banco_id: '', nome: '', agencia: '', conta: '', saldo_inicial: 0, conta_contabil_id: '' });
     setIsAddingBanco(false);
     setNewBanco({ codigo_bacen: '', nome: '' });
   };
@@ -92,7 +96,8 @@ function ContasBancarias() {
         nome: formData.nome,
         agencia: formData.agencia,
         conta: formData.conta,
-        saldo_inicial: parseFloat(formData.saldo_inicial) || 0
+        saldo_inicial: parseFloat(formData.saldo_inicial) || 0,
+        conta_contabil_id: formData.conta_contabil_id || undefined
       };
 
       if (isEditing) {
@@ -240,6 +245,20 @@ function ContasBancarias() {
                   className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-slate-800 dark:text-white outline-none transition-all"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Conta Contábil (Plano de Contas)</label>
+                <select
+                  required={!isEditing}
+                  value={formData.conta_contabil_id}
+                  onChange={e => setFormData({...formData, conta_contabil_id: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-slate-800 dark:text-white outline-none transition-all"
+                >
+                  <option value="">Selecione uma conta contábil...</option>
+                  {planoContas.map(c => (
+                    <option key={c.id} value={c.id}>{c.codigo_estruturado} — {c.nome}</option>
+                  ))}
+                </select>
+              </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/5">
                 <button type="button" onClick={handleCloseModal} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
                   Cancelar
@@ -375,11 +394,23 @@ export default function Financeiro() {
           onClick={() => setActiveTab('plano')}
           ...
         />
+        */}
         <button
           onClick={() => setActiveTab('centros')}
-          ...
-        />
-        */}
+          className={`pb-4 px-2 text-sm font-bold transition-colors relative ${
+            activeTab === 'centros' 
+              ? 'text-brand-primary' 
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Layers size={16} />
+            Centros de Custo
+          </div>
+          {activeTab === 'centros' && (
+            <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-primary" />
+          )}
+        </button>
       </div>
 
       <motion.div
@@ -389,8 +420,8 @@ export default function Financeiro() {
       >
         {activeTab === 'contas' && <ContasBancarias />}
         {activeTab === 'faturas' && <FaturasCartao />}
+        {activeTab === 'centros' && <CentrosCusto />}
         {/* {activeTab === 'plano' && <PlanoContas />} */}
-        {/* {activeTab === 'centros' && <CentrosCusto />} */}
       </motion.div>
     </div>
   );

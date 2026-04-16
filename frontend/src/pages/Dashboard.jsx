@@ -20,15 +20,6 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 
-// Dados de exemplo para fallback visual
-const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const generateFallbackFluxo = () =>
-  MONTHS.map((mes, i) => ({
-    mes,
-    entradas: Math.round(15000 + Math.random() * 20000),
-    saidas: Math.round(8000 + Math.random() * 12000),
-    saldo: Math.round(5000 + Math.random() * 8000),
-  }));
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -51,7 +42,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
-  const [fluxoData, setFluxoData] = useState(generateFallbackFluxo());
+  const [fluxoData, setFluxoData] = useState([]);
   const [dataFallback, setDataFallback] = useState(false);
 
   const fetchDashboardData = async () => {
@@ -74,6 +65,7 @@ const Dashboard = () => {
       setRecentLogs(Array.isArray(logsRes.data) ? logsRes.data.slice(0, 5) : []);
     } catch (err) {
       console.error("Erro ao carregar dashboard:", err);
+      setFluxoData([]);
       setDataFallback(true);
     } finally {
       setLoading(false);

@@ -28,7 +28,7 @@ async def list_vinculos_contador(
     # Busca vínculos N:N onde o usuário é Auditor/Contador
     stmt = select(Empresa).join(UsuarioEmpresa).where(
         UsuarioEmpresa.usuario_id == user_id,
-        UsuarioEmpresa.role == UserRole.AUDITOR_CONTADOR,
+        UsuarioEmpresa.role == UserRole.CONTADOR,
         UsuarioEmpresa.ativo == True
     )
     return db.exec(stmt).all()
@@ -48,7 +48,7 @@ async def switch_tenant_context(
     check = db.exec(select(UsuarioEmpresa).where(
         UsuarioEmpresa.usuario_id == user_id,
         UsuarioEmpresa.empresa_id == empresa_id,
-        UsuarioEmpresa.role == UserRole.AUDITOR_CONTADOR
+        UsuarioEmpresa.role == UserRole.CONTADOR
     )).first()
 
     if not check:
@@ -79,7 +79,7 @@ async def get_dashboard_metrics(
     # 1. Pegar IDs das empresas permitidas
     vinculos = db.exec(select(UsuarioEmpresa.empresa_id).where(
         UsuarioEmpresa.usuario_id == user_id,
-        UsuarioEmpresa.role == UserRole.AUDITOR_CONTADOR
+        UsuarioEmpresa.role == UserRole.CONTADOR
     )).all()
     
     if not vinculos:

@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Reports from './pages/Reports';
 import Financeiro from './pages/Financeiro/Financeiro';
 import Parceiros from './pages/Parceiros/Parceiros';
+import Emprestimos from './pages/Financeiro/Emprestimos';
 import ContasPagar from './pages/Financeiro/ContasPagar';
 import ContasReceber from './pages/Financeiro/ContasReceber';
 import Tesouraria from './pages/Financeiro/Tesouraria';
@@ -262,6 +263,11 @@ function AppContent() {
               </ProtectedRoute>
             } />
             
+            <Route path="/financeiro/emprestimos" element={
+              <ProtectedRoute>
+                <Emprestimos />
+              </ProtectedRoute>
+            } />
             {/* Operações Financeiras */}
             <Route path="/financeiro/pagar" element={
               <ProtectedRoute>

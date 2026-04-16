@@ -138,6 +138,8 @@ class TipoEventoContabil(str, Enum):
     ADIANTAMENTO_CLIENTE = "ADIANTAMENTO_CLIENTE"
     ADIANTAMENTO_FORNECEDOR = "ADIANTAMENTO_FORNECEDOR"
     TRANSFERENCIA_INTERNA = "TRANSFERENCIA_INTERNA"
+    CONTRATACAO_EMPRESTIMO = "CONTRATACAO_EMPRESTIMO"
+    PAGAMENTO_PARCELA_EMPRESTIMO = "PAGAMENTO_PARCELA_EMPRESTIMO"
 
 class StatusLancamento(str, Enum):
     ABERTO = "ABERTO"
@@ -145,6 +147,27 @@ class StatusLancamento(str, Enum):
     PARCIAL = "PARCIAL"
     CANCELADO = "CANCELADO"
     CONCILIADO = "CONCILIADO"
+
+class StatusEmprestimo(str, Enum):
+    ATIVO = "ATIVO"
+    QUITADO = "QUITADO"
+    INADIMPLENTE = "INADIMPLENTE"
+    CANCELADO = "CANCELADO"
+
+class TipoAmortizacao(str, Enum):
+    PRICE = "PRICE"   # parcelas fixas (tabela Price)
+    SAC = "SAC"       # amortizações constantes
+    LIVRE = "LIVRE"   # fluxo livre / bullet
+
+class TipoJuros(str, Enum):
+    SIMPLES = "SIMPLES"
+    COMPOSTO = "COMPOSTO"
+
+class StatusParcela(str, Enum):
+    PENDENTE = "PENDENTE"
+    PAGA = "PAGA"
+    ATRASADA = "ATRASADA"
+    CANCELADA = "CANCELADA"
 
 # --- MODELS ---
 
@@ -419,6 +442,88 @@ class LancamentoFinanceiro(FullAuditMixin, table=True):
     # Governança (SoD)
     usuario_criacao_id: UUID = Field(foreign_key="usuarios.id")
     usuario_liquidacao_id: Optional[UUID] = Field(default=None, foreign_key="usuarios.id")
+
+class Emprestimo(FullAuditMixin, table=True):
+    __tablename__ = "emprestimos"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+
+    # Credor / Instituição Financeira
+    parceiro_id: Optional[UUID] = Field(default=None, foreign_key="parceiros.id", index=True)
+
+    # Conta bancária receptora do valor
+    conta_bancaria_id: UUID = Field(foreign_key="contas_bancarias.id", index=True)
+
+    # Vínculos Contábeis OBRIGATÓRIOS
+    # Conta de Passivo: ex. "2.1.01 - Empréstimos e Financiamentos a Pagar"
+    conta_contabil_passivo_id: UUID = Field(foreign_key="plano_contas.id")
+    # Conta de Despesa: ex. "4.1.03 - Juros Passivos sobre Empréstimos"
+    conta_contabil_juros_id: UUID = Field(foreign_key="plano_contas.id")
+
+    # Valores
+    valor_contratado: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    saldo_devedor: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+
+    # Taxa e Condições
+    taxa_juros: PyDecimal = Field(sa_type=Numeric(precision=10, scale=6))  # ex: 0.012000 = 1.2% a.m.
+    tipo_juros: TipoJuros = Field(default=TipoJuros.COMPOSTO)
+    tipo_amortizacao: TipoAmortizacao = Field(default=TipoAmortizacao.PRICE)
+
+    # Datas
+    data_contratacao: date
+    data_primeira_parcela: date
+    data_vencimento_final: date
+
+    # Parcelas
+    numero_parcelas: int = Field(default=1)
+    periodicidade_dias: int = Field(default=30)  # 30=mensal, 90=trimestral, etc.
+    carencia_dias: int = Field(default=0)
+
+    # Status
+    status: StatusEmprestimo = Field(default=StatusEmprestimo.ATIVO, index=True)
+
+    # Descritivo
+    descricao: Optional[str] = Field(default=None, max_length=255)
+    numero_contrato: Optional[str] = Field(default=None, max_length=100)
+    observacoes: Optional[str] = Field(default=None)
+
+    # Governança
+    usuario_criacao_id: UUID = Field(foreign_key="usuarios.id")
+
+    # Relacionamento
+    parcelas: List["ParcelaEmprestimo"] = Relationship(back_populates="emprestimo")
+
+
+class ParcelaEmprestimo(FullAuditMixin, table=True):
+    __tablename__ = "parcelas_emprestimo"
+    __table_args__ = (
+        Index("ix_parcela_emprestimo_vencimento", "empresa_id", "status", "data_vencimento"),
+    )
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+
+    emprestimo_id: UUID = Field(foreign_key="emprestimos.id", index=True)
+    numero_parcela: int
+
+    # Valores decompostos (principal + juros separados — regra fundamental)
+    valor_principal: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    valor_juros: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    valor_total: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    valor_pago: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+
+    # Datas
+    data_vencimento: date = Field(index=True)
+    data_pagamento: Optional[date] = Field(default=None)
+
+    # Status
+    status: StatusParcela = Field(default=StatusParcela.PENDENTE, index=True)
+
+    # Vínculo com lançamento financeiro gerado no pagamento
+    lancamento_id: Optional[UUID] = Field(default=None, foreign_key="lancamentos_financeiros.id")
+
+    # Governança SoD
+    usuario_liquidacao_id: Optional[UUID] = Field(default=None, foreign_key="usuarios.id")
+
+    emprestimo: "Emprestimo" = Relationship(back_populates="parcelas")
+
 
 # --- DATABASE SETUP ---
 

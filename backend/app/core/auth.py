@@ -2,6 +2,7 @@ from fastapi import Header, HTTPException, Depends, status
 from sqlmodel import Session, select
 from uuid import UUID
 from typing import List, Optional
+import os
 
 from app.models.database import engine, UsuarioEmpresa, UserRole, User
 
@@ -55,7 +56,13 @@ class RoleChecker:
         """
         if not user_id:
             # Em modo mock/dev, pode ser que o X-User-ID não venha
-            return True
+            dev_mode = os.getenv("DEV_MODE", "false").lower() in ("1", "true", "yes")
+            if dev_mode:
+                return True
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Autenticação obrigatória."
+            )
 
         # Consulta ao banco para verificar vínculo N:N
         stmt = select(UsuarioEmpresa).where(

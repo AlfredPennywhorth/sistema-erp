@@ -54,10 +54,10 @@ class TenantMixin(SQLModel):
 
 class AuditMixin(SQLModel):
     """Campos de auditoria padrão"""
-    criado_em: datetime = Field(default_factory=lambda: datetime.now())
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     atualizado_em: datetime = Field(
-        default_factory=lambda: datetime.now(), 
-        sa_column_kwargs={"onupdate": lambda: datetime.now()}
+        default_factory=lambda: datetime.now(timezone.utc), 
+        sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)}
     )
 
 class FullAuditMixin(TenantMixin, AuditMixin):
@@ -120,6 +120,13 @@ class NaturezaFinanceira(str, Enum):
     PAGAR = "PAGAR"
     RECEBER = "RECEBER"
 
+class TipoContaBancaria(str, Enum):
+    CORRENTE = "CORRENTE"
+    POUPANCA = "POUPANCA"
+    INVESTIMENTO = "INVESTIMENTO"
+    CREDITO = "CREDITO"
+    CAIXA_FISICO = "CAIXA_FISICO"
+
 class TipoEventoContabil(str, Enum):
     COMPRA_PRAZO = "COMPRA_PRAZO"
     COMPRA_AVISTA = "COMPRA_AVISTA"
@@ -131,6 +138,8 @@ class TipoEventoContabil(str, Enum):
     ADIANTAMENTO_CLIENTE = "ADIANTAMENTO_CLIENTE"
     ADIANTAMENTO_FORNECEDOR = "ADIANTAMENTO_FORNECEDOR"
     TRANSFERENCIA_INTERNA = "TRANSFERENCIA_INTERNA"
+    CONTRATACAO_EMPRESTIMO = "CONTRATACAO_EMPRESTIMO"
+    PAGAMENTO_PARCELA_EMPRESTIMO = "PAGAMENTO_PARCELA_EMPRESTIMO"
 
 class StatusLancamento(str, Enum):
     ABERTO = "ABERTO"
@@ -138,6 +147,49 @@ class StatusLancamento(str, Enum):
     PARCIAL = "PARCIAL"
     CANCELADO = "CANCELADO"
     CONCILIADO = "CONCILIADO"
+
+class TipoFormaPagamento(str, Enum):
+    PIX = "PIX"
+    TRANSFERENCIA = "TRANSFERENCIA"
+    BOLETO = "BOLETO"
+    CARTAO_DEBITO = "CARTAO_DEBITO"
+    CARTAO_CREDITO = "CARTAO_CREDITO"
+    DINHEIRO = "DINHEIRO"
+    CHEQUE = "CHEQUE"
+
+class TipoOperacaoPagamento(str, Enum):
+    LIQUIDACAO_DIRETA = "LIQUIDACAO_DIRETA"
+    GERACAO_FATURA = "GERACAO_FATURA"
+    COMPENSACAO_BOLETO = "COMPENSACAO_BOLETO"
+    LIQUIDACAO_DIFERIDA = "LIQUIDACAO_DIFERIDA"
+    RECEBIMENTO_CARTAO = "RECEBIMENTO_CARTAO"
+
+class StatusFatura(str, Enum):
+    ABERTA = "ABERTA"
+    FECHADA = "FECHADA"
+    PAGA = "PAGA"
+    CANCELADA = "CANCELADA"
+
+class StatusEmprestimo(str, Enum):
+    ATIVO = "ATIVO"
+    QUITADO = "QUITADO"
+    INADIMPLENTE = "INADIMPLENTE"
+    CANCELADO = "CANCELADO"
+
+class TipoAmortizacao(str, Enum):
+    PRICE = "PRICE"   # parcelas fixas (tabela Price)
+    SAC = "SAC"       # amortizações constantes
+    LIVRE = "LIVRE"   # fluxo livre / bullet
+
+class TipoJuros(str, Enum):
+    SIMPLES = "SIMPLES"
+    COMPOSTO = "COMPOSTO"
+
+class StatusParcela(str, Enum):
+    PENDENTE = "PENDENTE"
+    PAGA = "PAGA"
+    ATRASADA = "ATRASADA"
+    CANCELADA = "CANCELADA"
 
 class TipoAplicacaoFinanceira(str, Enum):
     CDB = "CDB"
@@ -168,8 +220,8 @@ class User(SQLModel, table=True):
     nome: Optional[str] = Field(default=None)
     avatar_url: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
-    criado_em: datetime = Field(default_factory=lambda: datetime.now())
-    atualizado_em: datetime = Field(default_factory=lambda: datetime.now())
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class SegmentoMercado(SQLModel, table=True):
     __tablename__ = "segmentos_mercado"
@@ -235,8 +287,12 @@ class ContaBancaria(FullAuditMixin, table=True):
     nome: str = Field(max_length=100) # Ex: Bradesco PJ
     agencia: str = Field(max_length=20)
     conta: str = Field(max_length=20)
+    tipo_conta: TipoContaBancaria = Field(default=TipoContaBancaria.CORRENTE)
     saldo_inicial: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
     saldo_atual: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    limite_credito: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    conta_contabil_id: Optional[UUID] = Field(default=None, foreign_key="plano_contas.id")
+    ativo: bool = Field(default=True)
     
 class CentroCusto(FullAuditMixin, table=True):
     __tablename__ = "centros_custo"
@@ -251,8 +307,35 @@ class FormaPagamento(FullAuditMixin, table=True):
     __tablename__ = "formas_pagamento"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
-    nome: str = Field(max_length=100) # Ex: PIX, Boleto, Cartão de Crédito
+    nome: str = Field(max_length=100)
     taxa_padrao: PyDecimal = Field(default=0, sa_type=Numeric(precision=5, scale=2))
+    is_active: bool = Field(default=True)
+    # Campos operacionais
+    tipo: Optional[TipoFormaPagamento] = Field(default=None, nullable=True)
+    tipo_operacao: TipoOperacaoPagamento = Field(default=TipoOperacaoPagamento.LIQUIDACAO_DIRETA)
+    baixa_imediata: bool = Field(default=True)
+    gera_obrigacao_futura: bool = Field(default=False)
+    prazo_liquidacao_dias: int = Field(default=0)
+    permite_parcelamento: bool = Field(default=False)
+    max_parcelas: int = Field(default=1)
+    conta_transitoria_id: Optional[UUID] = Field(default=None, foreign_key="plano_contas.id", nullable=True)
+    # Calendário de cartão
+    dia_fechamento: Optional[int] = Field(default=None, nullable=True)   # Dia do mês em que a fatura fecha
+    dia_vencimento: Optional[int] = Field(default=None, nullable=True)   # Dia do mês em que a fatura vence
+
+
+class BandeiraCartao(FullAuditMixin, table=True):
+    """Taxas de administração por bandeira de cartão, por empresa."""
+    __tablename__ = "bandeiras_cartao"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
+    forma_pagamento_id: UUID = Field(foreign_key="formas_pagamento.id", index=True)
+    nome: str = Field(max_length=50)  # Visa, Mastercard, Elo, Amex, Hipercard
+    taxa_debito: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))        # Ex: 1.20% → 1.2000
+    taxa_credito_1x: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))
+    taxa_credito_2_6x: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))
+    taxa_credito_7_12x: PyDecimal = Field(default=0, sa_type=Numeric(precision=6, scale=4))
+    prazo_repasse_dias: int = Field(default=30)  # Dias para crédito na conta bancária
     is_active: bool = Field(default=True)
 
 class JournalEntry(AuditMixin, table=True):
@@ -323,7 +406,7 @@ class TrilhaAuditoriaContador(SQLModel, table=True):
     empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
     acao: str = Field(max_length=100)
     detalhes: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now())
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Representante(FullAuditMixin, table=True):
     __tablename__ = "representantes"
@@ -387,6 +470,18 @@ class ParceiroContato(FullAuditMixin, table=True):
 
     parceiro: "Parceiro" = Relationship(back_populates="contatos")
 
+class FaturaCartao(FullAuditMixin, table=True):
+    __tablename__ = "faturas_cartao"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    forma_pagamento_id: UUID = Field(foreign_key="formas_pagamento.id", index=True)
+    mes_referencia: date = Field(index=True)  # Sempre YYYY-MM-01
+    data_vencimento: date
+    data_fechamento: date
+    valor_total: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    status: StatusFatura = Field(default=StatusFatura.ABERTA, index=True)
+    # FK circular resolvida via use_alter na migração; sem restrição FK no model
+    lancamento_pagamento_id: Optional[UUID] = Field(default=None, nullable=True)
+
 class LancamentoFinanceiro(FullAuditMixin, table=True):
     __tablename__ = "lancamentos_financeiros"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
@@ -408,6 +503,7 @@ class LancamentoFinanceiro(FullAuditMixin, table=True):
     centro_custo_id: Optional[UUID] = Field(default=None, foreign_key="centros_custo.id", index=True)
     conta_bancaria_id: Optional[UUID] = Field(default=None, foreign_key="contas_bancarias.id", index=True)
     forma_pagamento_id: Optional[UUID] = Field(default=None, foreign_key="formas_pagamento.id", index=True)
+    fatura_cartao_id: Optional[UUID] = Field(default=None, foreign_key="faturas_cartao.id", nullable=True, index=True)
     
     # Valores
     valor_previsto: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
@@ -428,6 +524,87 @@ class LancamentoFinanceiro(FullAuditMixin, table=True):
     # Governança (SoD)
     usuario_criacao_id: UUID = Field(foreign_key="usuarios.id")
     usuario_liquidacao_id: Optional[UUID] = Field(default=None, foreign_key="usuarios.id")
+
+class Emprestimo(FullAuditMixin, table=True):
+    __tablename__ = "emprestimos"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+
+    # Credor / Instituição Financeira
+    parceiro_id: Optional[UUID] = Field(default=None, foreign_key="parceiros.id", index=True)
+
+    # Conta bancária receptora do valor
+    conta_bancaria_id: UUID = Field(foreign_key="contas_bancarias.id", index=True)
+
+    # Vínculos Contábeis OBRIGATÓRIOS
+    # Conta de Passivo: ex. "2.1.01 - Empréstimos e Financiamentos a Pagar"
+    conta_contabil_passivo_id: UUID = Field(foreign_key="plano_contas.id")
+    # Conta de Despesa: ex. "4.1.03 - Juros Passivos sobre Empréstimos"
+    conta_contabil_juros_id: UUID = Field(foreign_key="plano_contas.id")
+
+    # Valores
+    valor_contratado: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    saldo_devedor: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+
+    # Taxa e Condições
+    taxa_juros: PyDecimal = Field(sa_type=Numeric(precision=10, scale=6))  # ex: 0.012000 = 1.2% a.m.
+    tipo_juros: TipoJuros = Field(default=TipoJuros.COMPOSTO)
+    tipo_amortizacao: TipoAmortizacao = Field(default=TipoAmortizacao.PRICE)
+
+    # Datas
+    data_contratacao: date
+    data_primeira_parcela: date
+    data_vencimento_final: date
+
+    # Parcelas
+    numero_parcelas: int = Field(default=1)
+    periodicidade_dias: int = Field(default=30)  # 30=mensal, 90=trimestral, etc.
+    carencia_dias: int = Field(default=0)
+
+    # Status
+    status: StatusEmprestimo = Field(default=StatusEmprestimo.ATIVO, index=True)
+
+    # Descritivo
+    descricao: Optional[str] = Field(default=None, max_length=255)
+    numero_contrato: Optional[str] = Field(default=None, max_length=100)
+    observacoes: Optional[str] = Field(default=None)
+
+    # Governança
+    usuario_criacao_id: UUID = Field(foreign_key="usuarios.id")
+
+    # Relacionamento
+    parcelas: List["ParcelaEmprestimo"] = Relationship(back_populates="emprestimo")
+
+
+class ParcelaEmprestimo(FullAuditMixin, table=True):
+    __tablename__ = "parcelas_emprestimo"
+    __table_args__ = (
+        Index("ix_parcela_emprestimo_vencimento", "empresa_id", "status", "data_vencimento"),
+    )
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+
+    emprestimo_id: UUID = Field(foreign_key="emprestimos.id", index=True)
+    numero_parcela: int
+
+    # Valores decompostos (principal + juros separados — regra fundamental)
+    valor_principal: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    valor_juros: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    valor_total: PyDecimal = Field(sa_type=Numeric(precision=18, scale=2))
+    valor_pago: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+
+    # Datas
+    data_vencimento: date = Field(index=True)
+    data_pagamento: Optional[date] = Field(default=None)
+
+    # Status
+    status: StatusParcela = Field(default=StatusParcela.PENDENTE, index=True)
+
+    # Vínculo com lançamento financeiro gerado no pagamento
+    lancamento_id: Optional[UUID] = Field(default=None, foreign_key="lancamentos_financeiros.id")
+
+    # Governança SoD
+    usuario_liquidacao_id: Optional[UUID] = Field(default=None, foreign_key="usuarios.id")
+
+    emprestimo: "Emprestimo" = Relationship(back_populates="parcelas")
 
 class AplicacaoFinanceira(FullAuditMixin, table=True):
     """

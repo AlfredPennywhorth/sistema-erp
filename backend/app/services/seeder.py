@@ -2,8 +2,11 @@ import json
 import os
 from typing import Dict, Any, List
 from uuid import UUID
-from sqlmodel import Session
-from app.models.database import PlanoConta, TipoConta, NaturezaConta, CentroCusto
+from sqlmodel import Session, select
+from app.models.database import (
+    PlanoConta, TipoConta, NaturezaConta, CentroCusto, FormaPagamento,
+    BandeiraCartao, TipoFormaPagamento, TipoOperacaoPagamento
+)
 
 class SeederService:
     @staticmethod
@@ -80,4 +83,193 @@ class SeederService:
             )
             session.add(cc)
         
+        session.flush()
+
+    @staticmethod
+    def seed_formas_pagamento(session: Session, empresa_id: UUID) -> None:
+        """
+        Cria as formas de pagamento padrão para o tenant.
+        Usa upsert por nome para não duplicar em re-execuções.
+        """
+        formas_padrao = [
+            {
+                "nome": "PIX",
+                "tipo": TipoFormaPagamento.PIX,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Transferência Bancária",
+                "tipo": TipoFormaPagamento.TRANSFERENCIA,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Boleto Bancário",
+                "tipo": TipoFormaPagamento.BOLETO,
+                "tipo_operacao": TipoOperacaoPagamento.COMPENSACAO_BOLETO,
+                "baixa_imediata": False,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 2,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Cartão de Débito",
+                "tipo": TipoFormaPagamento.CARTAO_DEBITO,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 1,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Cartão de Crédito",
+                "tipo": TipoFormaPagamento.CARTAO_CREDITO,
+                "tipo_operacao": TipoOperacaoPagamento.GERACAO_FATURA,
+                "baixa_imediata": False,
+                "gera_obrigacao_futura": True,
+                "prazo_liquidacao_dias": 30,
+                "taxa_padrao": 0,
+                "permite_parcelamento": True,
+                "max_parcelas": 12,
+            },
+            {
+                "nome": "Dinheiro",
+                "tipo": TipoFormaPagamento.DINHEIRO,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIRETA,
+                "baixa_imediata": True,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+            {
+                "nome": "Cheque",
+                "tipo": TipoFormaPagamento.CHEQUE,
+                "tipo_operacao": TipoOperacaoPagamento.LIQUIDACAO_DIFERIDA,
+                "baixa_imediata": False,
+                "gera_obrigacao_futura": False,
+                "prazo_liquidacao_dias": 0,
+                "taxa_padrao": 0,
+                "permite_parcelamento": False,
+                "max_parcelas": 1,
+            },
+        ]
+
+        for item in formas_padrao:
+            existente = session.exec(
+                select(FormaPagamento).where(
+                    FormaPagamento.empresa_id == empresa_id,
+                    FormaPagamento.nome == item["nome"]
+                )
+            ).first()
+
+            if not existente:
+                forma = FormaPagamento(empresa_id=empresa_id, **item)
+                session.add(forma)
+
+        session.flush()
+
+    @staticmethod
+    def seed_bandeiras_cartao(session: Session, empresa_id: UUID) -> None:
+        """
+        Cria as bandeiras de cartão padrão para as formas de cartão de débito e crédito.
+        Taxas são aproximações de mercado brasileiro (2026). Upsert por forma+nome.
+        """
+        formas_cartao = session.exec(
+            select(FormaPagamento).where(
+                FormaPagamento.empresa_id == empresa_id,
+                FormaPagamento.tipo.in_([
+                    TipoFormaPagamento.CARTAO_CREDITO,
+                    TipoFormaPagamento.CARTAO_DEBITO
+                ])
+            )
+        ).all()
+
+        bandeiras_padrao = [
+            {
+                "nome": "Visa",
+                "taxa_debito": "1.25",
+                "taxa_credito_1x": "2.69",
+                "taxa_credito_2_6x": "3.09",
+                "taxa_credito_7_12x": "3.49",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "Mastercard",
+                "taxa_debito": "1.25",
+                "taxa_credito_1x": "2.69",
+                "taxa_credito_2_6x": "3.09",
+                "taxa_credito_7_12x": "3.49",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "Elo",
+                "taxa_debito": "1.35",
+                "taxa_credito_1x": "2.79",
+                "taxa_credito_2_6x": "3.19",
+                "taxa_credito_7_12x": "3.59",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "American Express",
+                "taxa_debito": "0.00",
+                "taxa_credito_1x": "3.09",
+                "taxa_credito_2_6x": "3.49",
+                "taxa_credito_7_12x": "3.89",
+                "prazo_repasse_dias": 30,
+            },
+            {
+                "nome": "Hipercard",
+                "taxa_debito": "1.40",
+                "taxa_credito_1x": "2.99",
+                "taxa_credito_2_6x": "3.39",
+                "taxa_credito_7_12x": "3.79",
+                "prazo_repasse_dias": 30,
+            },
+        ]
+
+        if not formas_cartao:
+            return
+
+        forma_ids = [str(f.id) for f in formas_cartao]
+
+        # Buscar todas as bandeiras existentes para as formas de cartão de uma só vez
+        bandeiras_existentes = session.exec(
+            select(BandeiraCartao).where(
+                BandeiraCartao.empresa_id == empresa_id,
+                BandeiraCartao.forma_pagamento_id.in_(forma_ids)
+            )
+        ).all()
+        chaves_existentes = {(str(b.forma_pagamento_id), b.nome) for b in bandeiras_existentes}
+
+        for forma in formas_cartao:
+            for item in bandeiras_padrao:
+                # American Express não tem modalidade débito
+                if forma.tipo == TipoFormaPagamento.CARTAO_DEBITO and item["nome"] == "American Express":
+                    continue
+
+                if (str(forma.id), item["nome"]) not in chaves_existentes:
+                    bandeira = BandeiraCartao(
+                        empresa_id=empresa_id,
+                        forma_pagamento_id=forma.id,
+                        **item
+                    )
+                    session.add(bandeira)
+
         session.flush()

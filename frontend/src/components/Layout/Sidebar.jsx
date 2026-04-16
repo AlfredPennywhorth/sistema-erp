@@ -16,7 +16,8 @@ import {
   Settings2,
   Building2,
   ArrowLeftRight,
-  BookOpen
+  BookOpen,
+  Banknote
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -35,6 +36,7 @@ const Sidebar = () => {
     { icon: <TrendingUp size={20} />, label: 'Contas a Receber', path: '/financeiro/receber' },
     { icon: <Wallet size={20} />, label: 'Tesouraria & Extrato', path: '/financeiro/tesouraria' },
     { icon: <Building2 size={20} />, label: 'Aplicações Financeiras', path: '/financeiro/aplicacoes' },
+    { icon: <Banknote size={20} />, label: 'Empréstimos', path: '/financeiro/emprestimos' },
   ];
 
   const otherMenuItems = [

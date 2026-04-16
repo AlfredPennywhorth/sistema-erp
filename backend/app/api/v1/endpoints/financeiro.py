@@ -921,8 +921,8 @@ def get_dashboard_stats(
     ).where(LancamentoFinanceiro.empresa_id == tenant_id)
 
     stats_res = session.exec(stats_stmt).first()
-    a_pagar = stats_res[0] if stats_res else 0
-    a_receber = stats_res[1] if stats_res else 0
+    a_pagar = float(stats_res[0] or 0) if stats_res else 0.0
+    a_receber = float(stats_res[1] or 0) if stats_res else 0.0
 
     # 4. Fluxo Mensal — últimos 12 meses (somente lançamentos efetivados)
     today = date.today()
@@ -978,9 +978,9 @@ def get_dashboard_stats(
         })
 
     return {
-        "saldo_bancario": float(saldo_total),
-        "contas_a_pagar": float(a_pagar),
-        "contas_a_receber": float(a_receber),
+        "saldo_bancario": float(saldo_total or 0),
+        "contas_a_pagar": a_pagar,
+        "contas_a_receber": a_receber,
         "fluxo_mensal": fluxo_mensal,
     }
 

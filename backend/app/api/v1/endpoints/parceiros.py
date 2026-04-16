@@ -36,7 +36,7 @@ async def create_parceiro(
     # Extrai contatos se houver
     contatos_data = parceiro_in.contatos or []
     
-    parceiro_dict = parceiro_in.dict(exclude={"contatos"})
+    parceiro_dict = parceiro_in.model_dump(exclude={"contatos"})
     db_parceiro = Parceiro(**parceiro_dict)
     db_parceiro.empresa_id = tenant_id
     
@@ -48,7 +48,7 @@ async def create_parceiro(
         # Cria os contatos vinculados
         for contato_data in contatos_data:
             db_contato = ParceiroContato(
-                **contato_data.dict(),
+                **contato_data.model_dump(),
                 parceiro_id=db_parceiro.id,
                 empresa_id=tenant_id
             )
@@ -89,7 +89,7 @@ async def update_parceiro(
     if not db_parceiro or db_parceiro.empresa_id != tenant_id:
         raise HTTPException(status_code=404, detail="Parceiro não encontrado")
     
-    data = parceiro_data.dict(exclude_unset=True)
+    data = parceiro_data.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(db_parceiro, key, value)
         

@@ -20,6 +20,10 @@ export const api = axios.create({
 
 const isDebug = import.meta.env.VITE_DEBUG_MODE === 'true';
 
+// Modo mock — APENAS quando VITE_ENABLE_MOCK_AUTH=true no .env de desenvolvimento local.
+// Nunca deve ser true em produção. Requer ENABLE_MOCK_AUTH=true no backend também.
+const isEnableMockAuth = import.meta.env.VITE_ENABLE_MOCK_AUTH === 'true';
+
 // ─── Helpers de Tenant ────────────────────────────────────────────────────────
 export const setTenantId = (id) => {
   if (id) localStorage.setItem('erp_tenant_id', id);
@@ -65,8 +69,8 @@ api.interceptors.request.use(async (config) => {
     if (cached) {
       config.headers.Authorization = `Bearer ${cached.token}`;
       config.headers['X-User-ID'] = cached.userId;
-    } else {
-      // Fallback: modo MOCK (Admin)
+    } else if (isEnableMockAuth) {
+      // Fallback mock — ativo APENAS quando VITE_ENABLE_MOCK_AUTH=true
       const mockUserRaw = localStorage.getItem('erp_mock_user');
       if (mockUserRaw) {
         const mockUser = JSON.parse(mockUserRaw);

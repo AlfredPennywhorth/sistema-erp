@@ -22,6 +22,8 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading]         = useState(() => !readCache(CACHE_KEY_USER));
 
   const isDebug = import.meta.env.VITE_DEBUG_MODE === 'true';
+  // Modo mock — APENAS quando VITE_ENABLE_MOCK_AUTH=true no .env de desenvolvimento local.
+  const isEnableMockAuth = import.meta.env.VITE_ENABLE_MOCK_AUTH === 'true';
   const bgValidating = useRef(false); // evita múltiplas validações em background
 
   const log = (msg, data) => { if (isDebug) console.log(`[AUTH] ${msg}`, data ?? ''); };
@@ -55,8 +57,8 @@ export const AuthProvider = ({ children }) => {
           }
 
         } else {
-          // Tentar modo MOCK
-          const mockUser = readCache('erp_mock_user');
+          // Tentar modo MOCK — somente quando VITE_ENABLE_MOCK_AUTH=true
+          const mockUser = isEnableMockAuth ? readCache('erp_mock_user') : null;
           if (mockUser) {
             setUser(mockUser);
             setSession({ access_token: 'mock-token', user: mockUser });
@@ -144,33 +146,33 @@ export const AuthProvider = ({ children }) => {
 
   // ─── LOGIN ─────────────────────────────────────────────────────────────────
   async function login(email, password) {
-    // Modo MOCK
-    const mockEmail = email.toLowerCase();
-    if (mockEmail === 'admin' || mockEmail === 'operador' || mockEmail === 'admin-mock') {
-      const isOperador = mockEmail === 'operador';
-      
-      const mockUser = { 
-        id: isOperador 
-          ? '11111111-1111-1111-1111-111111111111' 
-          : '00000000-0000-0000-0000-000000000000', 
-        email: isOperador ? 'operador@erp.com' : 'admin@erp.com', 
-        user_metadata: { 
-          full_name: isOperador ? 'Operador Financeiro' : 'Administrador Demo' 
-        } 
-      };
-
-      localStorage.setItem('erp_mock_user', JSON.stringify(mockUser));
-      setUser(mockUser);
-      setSession({ access_token: 'mock-token', user: mockUser });
-      writeCache(CACHE_KEY_USER, mockUser);
-      try {
-        const res = await api.get('/tenants/list', { headers: { 'X-User-ID': mockUser.id } });
-        const tenants = res.data || [];
-        setUserTenants(tenants);
-        writeCache(CACHE_KEY_TENANTS, tenants);
-        return { user: mockUser, tenants };
-      } catch {
-        return { user: mockUser, tenants: [] };
+    // Modo MOCK — somente quando VITE_ENABLE_MOCK_AUTH=true (desenvolvimento local explícito)
+    if (isEnableMockAuth) {
+      const mockEmail = email.toLowerCase();
+      if (mockEmail === 'admin' || mockEmail === 'operador' || mockEmail === 'admin-mock') {
+        const isOperador = mockEmail === 'operador';
+        const mockUser = {
+          id: isOperador
+            ? '11111111-1111-1111-1111-111111111111'
+            : '00000000-0000-0000-0000-000000000000',
+          email: isOperador ? 'operador@erp.com' : 'admin@erp.com',
+          user_metadata: {
+            full_name: isOperador ? 'Operador Financeiro' : 'Administrador Demo',
+          },
+        };
+        localStorage.setItem('erp_mock_user', JSON.stringify(mockUser));
+        setUser(mockUser);
+        setSession({ access_token: 'mock-token', user: mockUser });
+        writeCache(CACHE_KEY_USER, mockUser);
+        try {
+          const res = await api.get('/tenants/list', { headers: { 'X-User-ID': mockUser.id } });
+          const tenants = res.data || [];
+          setUserTenants(tenants);
+          writeCache(CACHE_KEY_TENANTS, tenants);
+          return { user: mockUser, tenants };
+        } catch {
+          return { user: mockUser, tenants: [] };
+        }
       }
     }
 
@@ -183,7 +185,7 @@ export const AuthProvider = ({ children }) => {
     writeCache(CACHE_KEY_USER, sbUser);
 
     try {
-      // Buscar empresas em paralelo com a sessão (não bloqueia o redirect)
+      // Buscar empresas vinculadas após login
       const res = await api.get('/tenants/list', { headers: { 'X-User-ID': sbUser.id } });
       const tenants = res.data || [];
       setUserTenants(tenants);
@@ -197,7 +199,9 @@ export const AuthProvider = ({ children }) => {
   // ─── LOGOUT ────────────────────────────────────────────────────────────────
   const logout = async () => {
     try {
-      if (session?.access_token && session.access_token !== 'mock-token') {
+      // Deslogar do Supabase apenas se há uma sessão real (não mock)
+      const isMockSession = isEnableMockAuth && session?.access_token === 'mock-token';
+      if (session?.access_token && !isMockSession) {
         await supabase.auth.signOut();
       }
     } catch (err) {

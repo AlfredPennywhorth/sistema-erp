@@ -6,7 +6,7 @@ from decimal import Decimal
 from datetime import datetime, date
 from app.models.database import (
     NaturezaFinanceira, TipoLancamento, StatusLancamento, TipoEventoContabil,
-    TipoFormaPagamento, TipoOperacaoPagamento, StatusFatura
+    TipoContaBancaria, TipoFormaPagamento, TipoOperacaoPagamento, StatusFatura
 )
 # Enums (replicados dos models para typing ou importados)
 class NaturezaConta(str, Enum):
@@ -43,21 +43,32 @@ class ContaBancariaBase(BaseModel):
     nome: str = Field(..., max_length=100)
     agencia: str = Field(..., max_length=20)
     conta: str = Field(..., max_length=20)
+    tipo_conta: TipoContaBancaria = TipoContaBancaria.CORRENTE
     saldo_inicial: Decimal = Field(default=0, max_digits=18, decimal_places=2)
+    limite_credito: Decimal = Field(default=0, max_digits=18, decimal_places=2)
+    conta_contabil_id: Optional[UUID] = None
 
 class ContaBancariaCreate(ContaBancariaBase):
-    pass
+    conta_contabil_id: UUID  # Required on creation per business rule
 
 class ContaBancariaUpdate(BaseModel):
     banco_id: Optional[UUID] = None
     nome: Optional[str] = Field(None, max_length=100)
     agencia: Optional[str] = Field(None, max_length=20)
     conta: Optional[str] = Field(None, max_length=20)
+    tipo_conta: Optional[TipoContaBancaria] = None
     saldo_inicial: Optional[Decimal] = Field(None, max_digits=18, decimal_places=2)
+    limite_credito: Optional[Decimal] = Field(None, max_digits=18, decimal_places=2)
+    conta_contabil_id: Optional[UUID] = None
+    ativo: Optional[bool] = None
 
 class ContaBancariaRead(ContaBancariaBase):
     id: UUID
     empresa_id: UUID
+    saldo_atual: Decimal
+    saldo_disponivel: Optional[Decimal] = None
+    conta_contabil_nome: Optional[str] = None
+    ativo: bool = True
     criado_em: datetime
     class Config:
         from_attributes = True

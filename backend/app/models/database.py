@@ -54,10 +54,10 @@ class TenantMixin(SQLModel):
 
 class AuditMixin(SQLModel):
     """Campos de auditoria padrão"""
-    criado_em: datetime = Field(default_factory=lambda: datetime.now())
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     atualizado_em: datetime = Field(
-        default_factory=lambda: datetime.now(), 
-        sa_column_kwargs={"onupdate": lambda: datetime.now()}
+        default_factory=lambda: datetime.now(timezone.utc), 
+        sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)}
     )
 
 class FullAuditMixin(TenantMixin, AuditMixin):
@@ -120,6 +120,13 @@ class NaturezaFinanceira(str, Enum):
     PAGAR = "PAGAR"
     RECEBER = "RECEBER"
 
+class TipoContaBancaria(str, Enum):
+    CORRENTE = "CORRENTE"
+    POUPANCA = "POUPANCA"
+    INVESTIMENTO = "INVESTIMENTO"
+    CREDITO = "CREDITO"
+    CAIXA_FISICO = "CAIXA_FISICO"
+
 class TipoEventoContabil(str, Enum):
     COMPRA_PRAZO = "COMPRA_PRAZO"
     COMPRA_AVISTA = "COMPRA_AVISTA"
@@ -170,8 +177,8 @@ class User(SQLModel, table=True):
     nome: Optional[str] = Field(default=None)
     avatar_url: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
-    criado_em: datetime = Field(default_factory=lambda: datetime.now())
-    atualizado_em: datetime = Field(default_factory=lambda: datetime.now())
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class SegmentoMercado(SQLModel, table=True):
     __tablename__ = "segmentos_mercado"
@@ -237,8 +244,12 @@ class ContaBancaria(FullAuditMixin, table=True):
     nome: str = Field(max_length=100) # Ex: Bradesco PJ
     agencia: str = Field(max_length=20)
     conta: str = Field(max_length=20)
+    tipo_conta: TipoContaBancaria = Field(default=TipoContaBancaria.CORRENTE)
     saldo_inicial: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
     saldo_atual: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    limite_credito: PyDecimal = Field(default=0, sa_type=Numeric(precision=18, scale=2))
+    conta_contabil_id: Optional[UUID] = Field(default=None, foreign_key="plano_contas.id")
+    ativo: bool = Field(default=True)
     
 class CentroCusto(FullAuditMixin, table=True):
     __tablename__ = "centros_custo"
@@ -352,7 +363,7 @@ class TrilhaAuditoriaContador(SQLModel, table=True):
     empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
     acao: str = Field(max_length=100)
     detalhes: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now())
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Representante(FullAuditMixin, table=True):
     __tablename__ = "representantes"

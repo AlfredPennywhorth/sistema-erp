@@ -72,8 +72,9 @@ async def get_empresa_id_middleware(request: Request, call_next):
 
     path = request.url.path.rstrip("/")
 
-    # 1. BYPASS TOTAL para rotas públicas
+    # 1. BYPASS TOTAL para rotas públicas.
     # Usar correspondência exata para "/" e "" para evitar que "startswith('/')" vaze para todos os paths.
+    # "/" é público pois é o endpoint raiz de status do serviço (não expõe dados).
     if path in ("/", "") or any(path.startswith(p) for p in PUBLIC_PATHS):
         return await call_next(request)
 

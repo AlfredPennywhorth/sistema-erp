@@ -18,6 +18,17 @@ app = FastAPI(
 
 @app.on_event("startup")
 def on_startup():
+    import os
+    # Verificar configuração crítica de segurança na inicialização
+    if not os.getenv("SUPABASE_JWT_SECRET"):
+        print(
+            "\n"
+            "========================================================\n"
+            "[SECURITY WARNING] SUPABASE_JWT_SECRET não configurado.\n"
+            "Todas as rotas protegidas retornarão 503 Service Unavailable.\n"
+            "Configure SUPABASE_JWT_SECRET antes de usar em produção.\n"
+            "========================================================\n"
+        )
     try:
         from app.models.database import create_db_and_tables
         create_db_and_tables()

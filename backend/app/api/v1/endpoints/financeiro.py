@@ -884,6 +884,8 @@ def delete_conta_bancaria(
 def list_bancos(session: Session = Depends(get_session)):
     return session.exec(select(Banco)).all()
 
+_MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
 @router.get("/dashboard-stats")
 def get_dashboard_stats(
     tenant_id: UUID = Depends(get_current_tenant_id),
@@ -892,40 +894,94 @@ def get_dashboard_stats(
     """
     Retorna estatísticas consolidadas para o dashboard.
     """
-    # 1. Saldo Total em Contas (Query 1)
+    from sqlalchemy import case, and_, extract
+
+    # 1. Saldo Total em Contas Bancárias ativas
     saldo_total = session.exec(
         select(func.sum(ContaBancaria.saldo_atual))
-        .where(ContaBancaria.empresa_id == tenant_id)
+        .where(ContaBancaria.empresa_id == tenant_id, ContaBancaria.ativo == True)
     ).first() or Decimal('0.00')
 
-    # 2 e 3. Totais a Pagar e Receber (Query 2 - Otimizada com CASE)
-    from sqlalchemy import case, and_
+    # 2 e 3. Totais a Pagar e Receber em aberto
     stats_stmt = select(
         func.sum(case(
             (and_(
-                LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR, 
+                LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
                 LancamentoFinanceiro.status == StatusLancamento.ABERTO
             ), LancamentoFinanceiro.valor_previsto),
             else_=0
         )).label("a_pagar"),
         func.sum(case(
             (and_(
-                LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER, 
+                LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
                 LancamentoFinanceiro.status == StatusLancamento.ABERTO
             ), LancamentoFinanceiro.valor_previsto),
             else_=0
         )).label("a_receber")
     ).where(LancamentoFinanceiro.empresa_id == tenant_id)
-    
+
     stats_res = session.exec(stats_stmt).first()
-    a_pagar = stats_res[0] if stats_res else 0
-    a_receber = stats_res[1] if stats_res else 0
+    a_pagar = float(stats_res[0] or 0) if stats_res else 0.0
+    a_receber = float(stats_res[1] or 0) if stats_res else 0.0
+
+    # 4. Fluxo Mensal — últimos 12 meses (somente lançamentos efetivados)
+    today = date.today()
+    # First day of the month 11 months ago
+    start_year = today.year
+    start_month = today.month - 11
+    if start_month <= 0:
+        start_month += 12
+        start_year -= 1
+    start_date = date(start_year, start_month, 1)
+
+    fluxo_stmt = select(
+        extract('year', LancamentoFinanceiro.data_pagamento).label('ano'),
+        extract('month', LancamentoFinanceiro.data_pagamento).label('mes_num'),
+        func.sum(case(
+            (LancamentoFinanceiro.natureza == NaturezaFinanceira.RECEBER,
+             LancamentoFinanceiro.valor_pago),
+            else_=0
+        )).label('entradas'),
+        func.sum(case(
+            (LancamentoFinanceiro.natureza == NaturezaFinanceira.PAGAR,
+             LancamentoFinanceiro.valor_pago),
+            else_=0
+        )).label('saidas'),
+    ).where(
+        LancamentoFinanceiro.empresa_id == tenant_id,
+        LancamentoFinanceiro.status.in_([StatusLancamento.PAGO, StatusLancamento.CONCILIADO]),
+        LancamentoFinanceiro.data_pagamento >= start_date,
+    ).group_by('ano', 'mes_num').order_by('ano', 'mes_num')
+
+    fluxo_results = session.exec(fluxo_stmt).all()
+    fluxo_map = {
+        (int(r.ano), int(r.mes_num)): {
+            'entradas': float(r.entradas or 0),
+            'saidas': float(r.saidas or 0),
+        }
+        for r in fluxo_results
+    }
+
+    fluxo_mensal = []
+    for i in range(11, -1, -1):
+        m = today.month - i
+        y = today.year
+        if m <= 0:
+            m += 12
+            y -= 1
+        data_mes = fluxo_map.get((y, m), {'entradas': 0.0, 'saidas': 0.0})
+        fluxo_mensal.append({
+            'mes': _MESES_PT[m - 1],
+            'entradas': data_mes['entradas'],
+            'saidas': data_mes['saidas'],
+            'saldo': data_mes['entradas'] - data_mes['saidas'],
+        })
 
     return {
-        "saldo_bancario": float(saldo_total),
-        "contas_a_pagar": float(a_pagar),
-        "contas_a_receber": float(a_receber),
-        "percentual_vendas": 12.5 # Mockado por enquanto até vendas
+        "saldo_bancario": float(saldo_total or 0),
+        "contas_a_pagar": a_pagar,
+        "contas_a_receber": a_receber,
+        "fluxo_mensal": fluxo_mensal,
     }
 
 # --- Plano de Contas ---

@@ -24,11 +24,15 @@ async def list_vinculos_contador(
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido ou ausente.")
+    try:
+        user_uuid = UUID(str(user_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identidade do usuário inválida.")
 
     # Busca vínculos N:N onde o usuário é Auditor/Contador
     stmt = select(Empresa).join(UsuarioEmpresa).where(
-        UsuarioEmpresa.usuario_id == user_id,
-        UsuarioEmpresa.role == UserRole.AUDITOR_CONTADOR,
+        UsuarioEmpresa.usuario_id == user_uuid,
+        UsuarioEmpresa.role == UserRole.CONTADOR,
         UsuarioEmpresa.ativo == True
     )
     return db.exec(stmt).all()
@@ -43,12 +47,16 @@ async def switch_tenant_context(
     Registra a alternância de contexto na trilha de auditoria.
     """
     user_id = getattr(request.state, "user_id", None)
-    
+    try:
+        user_uuid = UUID(str(user_id)) if user_id else None
+    except ValueError:
+        user_uuid = None
+
     # Validar se o contador tem acesso a esta empresa
     check = db.exec(select(UsuarioEmpresa).where(
-        UsuarioEmpresa.usuario_id == user_id,
+        UsuarioEmpresa.usuario_id == user_uuid,
         UsuarioEmpresa.empresa_id == empresa_id,
-        UsuarioEmpresa.role == UserRole.AUDITOR_CONTADOR
+        UsuarioEmpresa.role == UserRole.CONTADOR
     )).first()
 
     if not check:
@@ -56,7 +64,7 @@ async def switch_tenant_context(
 
     # Registrar log de auditoria
     log = TrilhaAuditoriaContador(
-        usuario_id=user_id,
+        usuario_id=user_uuid,
         empresa_id=empresa_id,
         acao="ALTERNANCIA_CONTEXTO",
         detalhes={"timestamp": datetime.now().isoformat()}
@@ -75,11 +83,15 @@ async def get_dashboard_metrics(
     Retorna métricas agregadas das empresas vinculadas.
     """
     user_id = getattr(request.state, "user_id", None)
-    
+    try:
+        user_uuid = UUID(str(user_id)) if user_id else None
+    except ValueError:
+        user_uuid = None
+
     # 1. Pegar IDs das empresas permitidas
     vinculos = db.exec(select(UsuarioEmpresa.empresa_id).where(
-        UsuarioEmpresa.usuario_id == user_id,
-        UsuarioEmpresa.role == UserRole.AUDITOR_CONTADOR
+        UsuarioEmpresa.usuario_id == user_uuid,
+        UsuarioEmpresa.role == UserRole.CONTADOR
     )).all()
     
     if not vinculos:
@@ -112,7 +124,11 @@ async def list_honorarios(
     db: Session = Depends(get_session)
 ):
     user_id = getattr(request.state, "user_id", None)
-    stmt = select(HonorariosContador).where(HonorariosContador.usuario_id == user_id)
+    try:
+        user_uuid = UUID(str(user_id)) if user_id else None
+    except ValueError:
+        user_uuid = None
+    stmt = select(HonorariosContador).where(HonorariosContador.usuario_id == user_uuid)
     if status_filtro:
         stmt = stmt.where(HonorariosContador.status_pagamento == status_filtro)
     
@@ -125,7 +141,11 @@ async def create_honorario(
     db: Session = Depends(get_session)
 ):
     user_id = getattr(request.state, "user_id", None)
-    honorario.usuario_id = user_id
+    try:
+        user_uuid = UUID(str(user_id)) if user_id else None
+    except ValueError:
+        user_uuid = None
+    honorario.usuario_id = user_uuid
     db.add(honorario)
     db.commit()
     db.refresh(honorario)

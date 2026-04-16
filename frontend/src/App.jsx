@@ -264,6 +264,11 @@ function AppContent() {
               </ProtectedRoute>
             } />
             
+            <Route path="/financeiro" element={
+              <ProtectedRoute>
+                <Financeiro />
+              </ProtectedRoute>
+            } />
             <Route path="/financeiro/emprestimos" element={
               <ProtectedRoute>
                 <Emprestimos />

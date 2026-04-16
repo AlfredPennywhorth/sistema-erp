@@ -32,6 +32,7 @@ const Sidebar = () => {
   ];
 
   const operationalFinanceItems = [
+    { icon: <Building2 size={20} />, label: 'Contas Bancárias', path: '/financeiro' },
     { icon: <TrendingDown size={20} />, label: 'Contas a Pagar', path: '/financeiro/pagar' },
     { icon: <TrendingUp size={20} />, label: 'Contas a Receber', path: '/financeiro/receber' },
     { icon: <Wallet size={20} />, label: 'Tesouraria & Extrato', path: '/financeiro/tesouraria' },

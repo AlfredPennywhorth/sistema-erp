@@ -24,6 +24,7 @@ import {
   Scale,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { TERMS } from '../../constants/terms';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -32,32 +33,32 @@ const Sidebar = () => {
   const navigate = useNavigate();
 
   const mainMenuItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Início', path: '/dashboard' },
+    { icon: <LayoutDashboard size={20} />, label: TERMS.sidebar.inicio, path: '/dashboard' },
   ];
 
   const operationalFinanceItems = [
-    { icon: <Building2 size={20} />, label: 'Contas Bancárias', path: '/financeiro' },
-    { icon: <TrendingDown size={20} />, label: 'Contas a Pagar', path: '/financeiro/pagar' },
-    { icon: <TrendingUp size={20} />, label: 'Contas a Receber', path: '/financeiro/receber' },
-    { icon: <Wallet size={20} />, label: 'Tesouraria & Extrato', path: '/financeiro/tesouraria' },
-    { icon: <Building2 size={20} />, label: 'Aplicações Financeiras', path: '/financeiro/aplicacoes' },
-    { icon: <Banknote size={20} />, label: 'Empréstimos', path: '/financeiro/emprestimos' },
+    { icon: <Building2 size={20} />, label: TERMS.sidebar.contasBancarias, path: '/financeiro' },
+    { icon: <TrendingDown size={20} />, label: TERMS.financeiro.contasPagar, path: '/financeiro/pagar' },
+    { icon: <TrendingUp size={20} />, label: TERMS.financeiro.contasReceber, path: '/financeiro/receber' },
+    { icon: <Wallet size={20} />, label: TERMS.financeiro.tesourariaExtrato, path: '/financeiro/tesouraria' },
+    { icon: <Building2 size={20} />, label: TERMS.sidebar.aplicacoesFinanceiras, path: '/financeiro/aplicacoes' },
+    { icon: <Banknote size={20} />, label: TERMS.sidebar.emprestimos, path: '/financeiro/emprestimos' },
   ];
 
   const otherMenuItems = [
-    { icon: <Users size={20} />, label: 'Parceiros', path: '/parceiros' },
-    { icon: <ShieldCheck size={20} />, label: 'Equipe', path: '/equipe' },
-    { icon: <BarChart3 size={20} />, label: 'Relatórios', path: '/relatorios' },
-    { icon: <Settings2 size={20} />, label: 'Plano de Contas', path: '/financeiro/plano-contas' },
+    { icon: <Users size={20} />, label: TERMS.sidebar.parceiros, path: '/parceiros' },
+    { icon: <ShieldCheck size={20} />, label: TERMS.sidebar.equipe, path: '/equipe' },
+    { icon: <BarChart3 size={20} />, label: TERMS.sidebar.relatorios, path: '/relatorios' },
+    { icon: <Settings2 size={20} />, label: TERMS.contabil.planoContas, path: '/financeiro/plano-contas' },
     { 
       icon: <BookOpen size={20} />, 
-      label: 'Regras Contábeis', 
+      label: TERMS.sidebar.regrasContabeis, 
       path: '/financeiro/regras-contabeis',
       allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER']
     },
     {
       icon: <Calculator size={20} />,
-      label: 'Portal Contador',
+      label: TERMS.sidebar.portalContador,
       path: '/contador',
       allowedRoles: ['CONTADOR'],
     },
@@ -66,19 +67,19 @@ const Sidebar = () => {
   const contabilidadeItems = [
     {
       icon: <Settings2 size={20} />,
-      label: 'Configuração',
+      label: TERMS.contabil.configuracao,
       path: '/contabilidade/configuracao',
       allowedRoles: ['ADMIN', 'OWNER'],
     },
     {
       icon: <BookOpen size={20} />,
-      label: 'Lançamentos',
+      label: TERMS.contabil.lancamentos,
       path: '/contabilidade/lancamentos',
       allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
     },
     {
       icon: <FileSpreadsheet size={20} />,
-      label: 'Balancete',
+      label: TERMS.contabil.balancete,
       path: '/contabilidade/balancete',
       allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
     },
@@ -90,7 +91,7 @@ const Sidebar = () => {
     },
     {
       icon: <Scale size={20} />,
-      label: 'Balanço',
+      label: TERMS.contabil.balanco,
       path: '/contabilidade/balanco',
       allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
     },
@@ -143,7 +144,7 @@ const Sidebar = () => {
                 {empresa?.nome_fantasia || empresa?.razao_social || 'ERP MODULAR'}
               </h1>
               <p className="text-[10px] uppercase tracking-widest text-brand-primary font-black">
-                {empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : 'Aguardando Setup'}
+                {empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : TERMS.sidebar.aguardandoSetup}
               </p>
             </div>
           )}
@@ -155,7 +156,7 @@ const Sidebar = () => {
             className="mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-brand-primary/10 text-slate-400 hover:text-brand-primary text-[10px] font-black uppercase tracking-widest transition-all group"
           >
             <ArrowLeftRight size={12} className="group-hover:rotate-180 transition-transform duration-300" />
-            Alternar Empresa
+            {TERMS.sidebar.alternárEmpresa}
             <span className="ml-auto bg-brand-primary/20 text-brand-primary text-[9px] px-1.5 py-0.5 rounded-full">
               {userTenants.length}
             </span>
@@ -171,7 +172,7 @@ const Sidebar = () => {
             onClick={() => window.dispatchEvent(new CustomEvent('open-quick-launch'))}
           >
             <PlusCircle size={18} className="group-hover:rotate-90 transition-transform" />
-            Lançamento Rápido
+            {TERMS.sidebar.lancamentoRapido}
           </button>
         </div>
       )}
@@ -187,7 +188,7 @@ const Sidebar = () => {
         <div className="space-y-1">
           {!isCollapsed && (
             <p className="px-3 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
-              Operações Financeiras
+              {TERMS.sidebar.operacoesFinanceiras}
             </p>
           )}
           {operationalFinanceItems.map((item) => <MenuItem key={item.path} item={item} />)}
@@ -197,7 +198,7 @@ const Sidebar = () => {
         <div className="space-y-1">
           {!isCollapsed && (
             <p className="px-3 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
-              Gestão e Cadastros
+              {TERMS.sidebar.gestaoCadastros}
             </p>
           )}
           {filteredOtherItems.map((item) => <MenuItem key={item.path} item={item} />)}
@@ -208,7 +209,7 @@ const Sidebar = () => {
           <div className="space-y-1">
             {!isCollapsed && (
               <p className="px-3 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
-                Módulo Contábil
+                {TERMS.sidebar.moduloContabil}
               </p>
             )}
             {filteredContabilidadeItems.map((item) => <MenuItem key={item.path} item={item} />)}
@@ -231,10 +232,10 @@ const Sidebar = () => {
             <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
               <Zap size={16} />
             </div>
-            <span className="text-xs font-black text-white uppercase tracking-wider">Compliance Ativo</span>
+            <span className="text-xs font-black text-white uppercase tracking-wider">{TERMS.compliance.complianceAtivo}</span>
           </div>
           <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
-            Segregação de Funções (SoD) monitorada pelo sistema.
+            {TERMS.compliance.sodMonitorado}
           </p>
         </div>
       )}

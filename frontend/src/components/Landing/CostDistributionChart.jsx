@@ -1,6 +1,7 @@
 import React from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { brl, pct } from './formatters';
+import { TERMS } from '../../constants/terms';
 
 const COLORS = ['#99f7ff', '#a19ff9', '#6063ee', '#f59e0b', '#94a3b8'];
 
@@ -21,7 +22,7 @@ export function CostDistributionChart({ costDistribution }) {
   return (
     <div className="p-6 bg-slate-900/60 rounded-2xl border border-white/5">
       <h4 className="text-xs font-black mb-6 uppercase tracking-widest text-slate-400">
-        Distribuição de Custos
+        {TERMS.graficos.distribuicaoCustos}
       </h4>
       <div className="flex flex-col sm:flex-row items-center gap-8">
         <div className="w-40 h-40 shrink-0">

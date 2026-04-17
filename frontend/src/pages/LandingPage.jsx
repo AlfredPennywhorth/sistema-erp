@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BRAND } from '../config/branding';
+import { TERMS } from '../constants/terms';
 import {
   Landmark,
   BarChart3,
@@ -116,15 +117,14 @@ export default function LandingPage() {
 
             <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight mb-6">
               <span className="bg-gradient-to-r from-cyan-300 to-indigo-400 bg-clip-text text-transparent">
-                Gestão Financeira
+                {TERMS.landing.gestaoFinanceira}
               </span>
               <br />
-              e Contábil Integrada
+              {TERMS.landing.contabilIntegrada}
             </h1>
 
             <p className="text-slate-400 text-lg lg:text-xl mb-10 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              Sistema ERP multi-empresa com módulo contábil completo. Partidas dobradas automáticas,
-              plano de contas por setor, DRE, Balancete e Balanço Patrimonial em tempo real.
+              {TERMS.landing.descricaoHero}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -132,14 +132,14 @@ export default function LandingPage() {
                 onClick={() => navigate('/login')}
                 className="flex items-center justify-center gap-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black px-8 py-4 rounded-2xl transition-all shadow-lg shadow-cyan-400/20 group"
               >
-                Acessar o Sistema
+                {TERMS.landing.acessarSistema}
                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </button>
               <button
                 onClick={() => navigate('/onboarding')}
                 className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold px-8 py-4 rounded-2xl border border-white/10 transition-all"
               >
-                Criar Empresa
+                {TERMS.onboarding.criarEmpresa}
               </button>
             </div>
           </div>
@@ -163,14 +163,14 @@ export default function LandingPage() {
             <span className="inline-block px-4 py-1.5 rounded-full bg-cyan-400/10 text-cyan-300 text-xs font-black uppercase tracking-widest mb-4">
               Dashboard Central
             </span>
-            <h2 className="text-3xl font-black">Visão Consolidada do Grupo</h2>
+            <h2 className="text-3xl font-black">{TERMS.landing.visaoConsolidadaGrupo}</h2>
           </div>
 
           {/* Error fallback */}
           {error && (
             <div className="flex items-center gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-400 text-sm font-medium mb-8">
               <AlertTriangle size={18} className="shrink-0" />
-              <span>Não foi possível carregar os dados. {error}</span>
+              <span>{TERMS.landing.erroCarregamento} {error}</span>
             </div>
           )}
 
@@ -205,9 +205,9 @@ export default function LandingPage() {
       <section className="py-16 px-6 bg-slate-900/40">
         <div className="max-w-7xl mx-auto">
           <div className="mb-10 text-center">
-            <h2 className="text-3xl font-black">Métricas que impulsionam o crescimento</h2>
+            <h2 className="text-3xl font-black">{TERMS.landing.metricasGrowth}</h2>
             <p className="text-slate-400 mt-3 max-w-2xl mx-auto text-sm leading-relaxed">
-              Distribuição de custos e consolidado multi-empresa para tomada de decisão baseada em dados reais.
+              {TERMS.landing.metricasDesc}
             </p>
           </div>
           {loading ? (
@@ -229,7 +229,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300 mb-3">Módulos</p>
-            <h2 className="text-3xl font-black text-white">Tudo o que sua empresa precisa</h2>
+            <h2 className="text-3xl font-black text-white">{TERMS.landing.tudoQueEmpresaPrecisa}</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {FEATURES.map((f) => (
@@ -252,10 +252,10 @@ export default function LandingPage() {
       <section className="py-24 px-6 relative overflow-hidden">
         <div className="max-w-4xl mx-auto text-center bg-white/3 border border-cyan-400/10 p-16 rounded-3xl relative z-10">
           <h2 className="text-4xl lg:text-5xl font-black mb-6">
-            Pronto para controlar sua empresa de verdade?
+            {TERMS.landing.ctaTitulo}
           </h2>
           <p className="text-slate-400 text-lg mb-12">
-            Junte-se a centenas de empresas que escalaram sua operação financeira com o {BRAND.slogan}.
+            {TERMS.landing.ctaDesc} {BRAND.slogan}.
           </p>
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <button
@@ -284,7 +284,7 @@ export default function LandingPage() {
           <span className="text-white font-black text-lg tracking-tight">{BRAND.name}</span>
         </div>
         <p className="text-slate-500 text-xs uppercase tracking-widest font-bold">
-          Desenvolvido com FastAPI · React · Supabase · SQLModel
+          {TERMS.landing.tecnologias}
         </p>
       </section>
     </div>

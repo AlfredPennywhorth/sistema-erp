@@ -139,7 +139,7 @@ const Login = () => {
               {isSubmitting ? (
                 <Loader2 className="animate-spin" size={20} />
               ) : (
-              <>Entrar no Sistema <ChevronRight size={20} /></>
+              <>{TERMS.auth.entrarSistema} <ChevronRight size={20} /></>
               )}
             </button>
           </form>

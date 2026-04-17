@@ -156,7 +156,7 @@ const Sidebar = () => {
             className="mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-brand-primary/10 text-slate-400 hover:text-brand-primary text-[10px] font-black uppercase tracking-widest transition-all group"
           >
             <ArrowLeftRight size={12} className="group-hover:rotate-180 transition-transform duration-300" />
-            {TERMS.sidebar.alternárEmpresa}
+            {TERMS.sidebar.alternarEmpresa}
             <span className="ml-auto bg-brand-primary/20 text-brand-primary text-[9px] px-1.5 py-0.5 rounded-full">
               {userTenants.length}
             </span>

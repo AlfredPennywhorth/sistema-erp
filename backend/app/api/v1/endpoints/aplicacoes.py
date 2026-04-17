@@ -31,6 +31,8 @@ from app.models.database import (
     LogAuditoria,
     StatusAplicacaoFinanceira,
     TipoResgate,
+    TipoEventoContabil,
+    NaturezaFinanceira,
 )
 from app.schemas.aplicacoes import (
     AplicacaoFinanceiraCreate,
@@ -43,6 +45,7 @@ from app.schemas.aplicacoes import (
     ResgateRead,
 )
 from app.core.auth import get_session, get_current_tenant_id, get_current_user_id
+from app.services.contabilidade import disparar_lancamento_por_regra
 
 router = APIRouter()
 
@@ -565,5 +568,26 @@ def resgatar_aplicacao(
         dados_novos=resgate.model_dump(mode="json"),
     )
     session.commit()
+
+    # Lançamento contábil automático (não bloqueia operação)
+    try:
+        from decimal import Decimal as _Dec
+        disparar_lancamento_por_regra(
+            db=session,
+            empresa_id=tenant_id,
+            tipo_evento=TipoEventoContabil.TRANSFERENCIA_INTERNA,
+            natureza=NaturezaFinanceira.RECEBER,
+            valor=_Dec(str(payload.valor_bruto)),
+            data=payload.data_resgate,
+            usuario_id=user_id,
+            historico_extra=f"Resgate {payload.tipo}: {aplicacao.nome}",
+        )
+        session.commit()
+    except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[CONTABIL] Falha ao disparar lançamento contábil pós-resgate — não afeta a operação.",
+            exc_info=True
+        )
 
     return resgate

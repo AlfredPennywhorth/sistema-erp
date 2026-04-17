@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1.endpoints import tenants, team, contador, financeiro, parceiros, accounting, aplicacoes, emprestimos, relatorios
+from app.api.v1.endpoints import tenants, team, contador, financeiro, parceiros, accounting, aplicacoes, emprestimos, relatorios, contabilidade
 from app.core.middleware import get_empresa_id_middleware
 from app.models.database import create_db_and_tables
 
@@ -69,6 +69,7 @@ app.include_router(accounting.router, prefix="/api/v1/accounting", tags=["Contab
 app.include_router(aplicacoes.router, prefix="/api/v1/aplicacoes", tags=["Aplicações Financeiras"])
 app.include_router(emprestimos.router, prefix="/api/v1/emprestimos", tags=["Módulo Empréstimos"])
 app.include_router(relatorios.router, prefix="/api/v1/relatorios", tags=["Relatórios"])
+app.include_router(contabilidade.router, prefix="/api/v1/contabilidade", tags=["Módulo Contábil"])
 
 @app.get("/api/v1/health", tags=["Infra"])
 async def health_check():

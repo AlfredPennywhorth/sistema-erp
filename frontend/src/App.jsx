@@ -19,6 +19,12 @@ import RegrasContabeis from './pages/Financeiro/RegrasContabeis';
 import AplicacoesFinanceiras from './pages/Financeiro/AplicacoesFinanceiras';
 import Contador from './pages/Contador/Contador';
 import EmpresaDetalhe from './pages/Contador/EmpresaDetalhe';
+import LancamentosContabeis from './pages/Contabilidade/LancamentosContabeis';
+import Balancete from './pages/Contabilidade/Balancete';
+import DRE from './pages/Contabilidade/DRE';
+import Balanco from './pages/Contabilidade/Balanco';
+import ConfiguracaoContabil from './pages/Contabilidade/ConfiguracaoContabil';
+import LandingPage from './pages/LandingPage';
 import Sidebar from './components/Layout/Sidebar';
 import QuickLaunchModal from './components/Financeiro/QuickLaunchModal';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -209,7 +215,7 @@ function AppContent() {
               isAuthenticated ? (
                 activeTenant ? <Navigate to="/dashboard" replace /> : <Navigate to="/selecionar-empresa" replace />
               ) : (
-                <Navigate to="/login" replace />
+                <LandingPage />
               )
             } />
 
@@ -321,6 +327,35 @@ function AppContent() {
             } />
 
             <Route path="/finalizar-registro" element={<FinalizarRegistro />} />
+
+            {/* Módulo Contábil */}
+            <Route path="/contabilidade/lancamentos" element={
+              <ProtectedRoute>
+                <LancamentosContabeis />
+              </ProtectedRoute>
+            } />
+            <Route path="/contabilidade/balancete" element={
+              <ProtectedRoute>
+                <Balancete />
+              </ProtectedRoute>
+            } />
+            <Route path="/contabilidade/dre" element={
+              <ProtectedRoute>
+                <DRE />
+              </ProtectedRoute>
+            } />
+            <Route path="/contabilidade/balanco" element={
+              <ProtectedRoute>
+                <Balanco />
+              </ProtectedRoute>
+            } />
+            <Route path="/contabilidade/configuracao" element={
+              <ProtectedRoute>
+                <ConfiguracaoContabil />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/landing" element={<LandingPage />} />
           </Routes>
         </main>
 

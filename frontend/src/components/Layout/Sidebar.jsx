@@ -18,7 +18,10 @@ import {
   ArrowLeftRight,
   BookOpen,
   Banknote,
-  Calculator
+  Calculator,
+  FileSpreadsheet,
+  Layers,
+  Scale,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -59,6 +62,44 @@ const Sidebar = () => {
       allowedRoles: ['CONTADOR'],
     },
   ];
+
+  const contabilidadeItems = [
+    {
+      icon: <Settings2 size={20} />,
+      label: 'Configuração',
+      path: '/contabilidade/configuracao',
+      allowedRoles: ['ADMIN', 'OWNER'],
+    },
+    {
+      icon: <BookOpen size={20} />,
+      label: 'Lançamentos',
+      path: '/contabilidade/lancamentos',
+      allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
+    },
+    {
+      icon: <FileSpreadsheet size={20} />,
+      label: 'Balancete',
+      path: '/contabilidade/balancete',
+      allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
+    },
+    {
+      icon: <BarChart3 size={20} />,
+      label: 'DRE',
+      path: '/contabilidade/dre',
+      allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
+    },
+    {
+      icon: <Scale size={20} />,
+      label: 'Balanço',
+      path: '/contabilidade/balanco',
+      allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
+    },
+  ];
+
+  const filteredContabilidadeItems = contabilidadeItems.filter(item => {
+    if (!item.allowedRoles) return true;
+    return item.allowedRoles.includes(empresa?.user_role);
+  });
 
   const filteredOtherItems = otherMenuItems.filter(item => {
     if (!item.allowedRoles) return true;
@@ -161,6 +202,18 @@ const Sidebar = () => {
           )}
           {filteredOtherItems.map((item) => <MenuItem key={item.path} item={item} />)}
         </div>
+
+        {/* Módulo Contábil */}
+        {filteredContabilidadeItems.length > 0 && (
+          <div className="space-y-1">
+            {!isCollapsed && (
+              <p className="px-3 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                Módulo Contábil
+              </p>
+            )}
+            {filteredContabilidadeItems.map((item) => <MenuItem key={item.path} item={item} />)}
+          </div>
+        )}
       </nav>
 
       {/* Toggle Button */}

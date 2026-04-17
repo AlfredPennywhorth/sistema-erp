@@ -15,7 +15,7 @@ export function MiniDRECard({ dre }) {
   const rows = [
     { label: TERMS.contabil.receitaBruta,            value: dre.receita_bruta,  color: 'text-white',       prefix: '' },
     { label: TERMS.contabil.deducoes,                value: dre.deducoes,       color: 'text-rose-400',    prefix: '-' },
-    { label: TERMS.contabil.receitaLiquida,          value: dre.receita_liquida,color: 'text-cyan-300',    prefix: '', bold: true, divider: true },
+    { label: TERMS.contabil.receitaLiquida,          value: dre.receita_liquida,color: 'text-green-400',   prefix: '', bold: true, divider: true },
     { label: TERMS.contabil.custos,                  value: dre.custos,         color: 'text-rose-400',    prefix: '-' },
     { label: TERMS.contabil.despesasOperacionais,    value: dre.despesas,       color: 'text-rose-400',    prefix: '-' },
     { label: TERMS.contabil.lucroLiquido,            value: dre.lucro,          color: 'text-emerald-400', prefix: '', bold: true, highlight: true, divider: true },

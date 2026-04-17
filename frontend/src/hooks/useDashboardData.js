@@ -26,7 +26,7 @@ export function useDashboardData({ mode = 'demo' } = {}) {
       try {
         if (mode === 'demo') {
           // Simula latência mínima para feedback de skeleton
-          await new Promise((r) => setTimeout(r, 400));
+          await new Promise((resolve) => setTimeout(resolve, 400));
           if (!cancelled) setData(landingDashboardMock);
         } else {
           // Busca todas as seções em paralelo

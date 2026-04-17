@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { brl } from './formatters';
 import { TERMS } from '../../constants/terms';
-import { CHART_COLORS } from '../../constants/chartColors';
+import { CHART_COLORS, withOpacity } from '../../constants/chartColors';
 
 function HeroTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -87,7 +87,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
                 {last6.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={i === last6.length - 1 ? CHART_COLORS.receitas : `${CHART_COLORS.receitas}4d`}
+                    fill={i === last6.length - 1 ? CHART_COLORS.receitas : withOpacity(CHART_COLORS.receitas, 0.3)}
                   />
                 ))}
               </Bar>
@@ -95,7 +95,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
                 {last6.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={i === last6.length - 1 ? CHART_COLORS.despesas : `${CHART_COLORS.despesas}40`}
+                    fill={i === last6.length - 1 ? CHART_COLORS.despesas : withOpacity(CHART_COLORS.despesas, 0.25)}
                   />
                 ))}
               </Bar>

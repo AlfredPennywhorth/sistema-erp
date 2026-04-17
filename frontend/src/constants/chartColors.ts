@@ -10,15 +10,20 @@
  *   Categóricos secundários                 = roxo, ciano, teal
  */
 
+// ── Primitivos ─────────────────────────────────────────────────────────────
+const POSITIVO  = '#22c55e';
+const NEGATIVO  = '#ef4444';
+const AZUL      = '#3b82f6';
+
 export const CHART_COLORS = {
   // ── Semântica financeira primária ─────────────────────────────────────────
-  entradas:        '#22c55e',   // verde — positivo
-  receitas:        '#22c55e',   // verde — positivo
-  saidas:          '#ef4444',   // vermelho — negativo
-  despesas:        '#ef4444',   // vermelho — negativo
+  entradas:        POSITIVO,    // verde — positivo
+  receitas:        POSITIVO,    // verde — positivo (alias)
+  saidas:          NEGATIVO,    // vermelho — negativo
+  despesas:        NEGATIVO,    // vermelho — negativo (alias)
 
   // ── Saldo / visão consolidada ─────────────────────────────────────────────
-  saldo:           '#3b82f6',   // azul — neutro/resultado
+  saldo:           AZUL,        // azul — neutro/resultado
   saldoProjetado:  '#60a5fa',   // azul claro — projeção
   consolidado:     '#2563eb',   // azul escuro — consolidado
 
@@ -29,7 +34,7 @@ export const CHART_COLORS = {
   neutro:          '#94a3b8',   // cinza
 
   // ── Categorias de custo ───────────────────────────────────────────────────
-  folha:           '#3b82f6',   // azul
+  folha:           AZUL,        // azul
   fornecedores:    '#8b5cf6',   // roxo
   tributos:        '#f59e0b',   // âmbar
   marketing:       '#06b6d4',   // ciano
@@ -46,5 +51,16 @@ export const CATEGORY_PALETTE: readonly string[] = [
   CHART_COLORS.fornecedores,
   CHART_COLORS.tributos,
   CHART_COLORS.marketing,
+  CHART_COLORS.tecnologia,
   CHART_COLORS.administrativo,
 ] as const;
+
+/**
+ * Retorna a cor com canal alpha em hexadecimal (ex: withOpacity('#22c55e', 0.3) → '#22c55e4d').
+ */
+export function withOpacity(hex: string, opacity: number): string {
+  const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${hex}${alpha}`;
+}

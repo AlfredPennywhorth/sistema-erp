@@ -195,7 +195,7 @@ def ativar_modulo_contabil(
             )
 
     # Idempotência: já ativado com o mesmo template
-    if empresa.modulo_contabil_ativo and str(empresa.plano_contas_template_id) == str(modelo.id):
+    if empresa.modulo_contabil_ativo and empresa.plano_contas_template_id == modelo.id:
         contas_existentes = db.exec(
             select(func.count(PlanoConta.id)).where(PlanoConta.empresa_id == tenant_id)
         ).one() or 0
@@ -710,12 +710,12 @@ def balanco_patrimonial(
     def _build_node(conta: PlanoConta, nivel: int = 0) -> BalancoItem:
         if conta.is_analitica:
             saldo = saldos.get(conta.id, _ZERO)
-            return BalancoItem(id=conta.id, conta_id=conta.id, codigo=conta.codigo_estruturado, nome=conta.nome, tipo=conta.tipo, saldo=saldo, nivel=nivel, filhos=[])
+            return BalancoItem(conta_id=conta.id, codigo=conta.codigo_estruturado, nome=conta.nome, tipo=conta.tipo, saldo=saldo, nivel=nivel, filhos=[])
         # Sintética: soma os filhos
         filhos = [c for c in contas if c.parent_id == conta.id]
         filhos_nodes = [_build_node(f, nivel + 1) for f in filhos]
         saldo_total = sum(f.saldo for f in filhos_nodes)
-        return BalancoItem(id=conta.id, conta_id=conta.id, codigo=conta.codigo_estruturado, nome=conta.nome, tipo=conta.tipo, saldo=saldo_total, nivel=nivel, filhos=filhos_nodes)
+        return BalancoItem(conta_id=conta.id, codigo=conta.codigo_estruturado, nome=conta.nome, tipo=conta.tipo, saldo=saldo_total, nivel=nivel, filhos=filhos_nodes)
 
     raizes_ativo = [c for c in contas if c.tipo == TipoConta.ATIVO and c.parent_id is None]
     raizes_passivo = [c for c in contas if c.tipo == TipoConta.PASSIVO and c.parent_id is None]

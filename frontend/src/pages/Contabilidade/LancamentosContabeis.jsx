@@ -59,10 +59,10 @@ export default function LancamentosContabeis() {
 
   useEffect(() => {
     fetchLotes();
-  }, []);
+  }, [fetchLotes]);
 
   useEffect(() => {
-    if (showModal && contas.length === 0) {
+    if (showModal) {
       FinanceiroAPI.getPlanoContas().then((data) => {
         setContas(Array.isArray(data) ? data.filter((c) => c.is_analitica && c.ativo) : []);
       });

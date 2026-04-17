@@ -86,6 +86,9 @@ def criar_lote_e_partidas(
             raise HTTPException(status_code=400, detail=f"debito_credito deve ser 'D' ou 'C'. Recebido: '{dc}'")
 
     # Validar equilíbrio com tolerância de 1 centavo para arredondamentos
+    # Justificativa: operações financeiras em Decimal podem acumular diferenças
+    # mínimas de arredondamento (ex: divisão de valor em parcelas). A tolerância
+    # de R$ 0,01 é a menor unidade monetária aceitável pelo Banco Central.
     if abs(soma_debitos - soma_creditos) > Decimal("0.01"):
         raise HTTPException(
             status_code=422,

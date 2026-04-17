@@ -282,7 +282,7 @@ export default function EmpresaDetalhe() {
             <h2 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Acesso Rápido</h2>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Dashboard', icon: <LayoutDashboard size={16} />, path: '/dashboard' },
+                { label: 'Início', icon: <LayoutDashboard size={16} />, path: '/dashboard' },
                 { label: 'Financeiro', icon: <Wallet size={16} />, path: '/financeiro' },
                 { label: 'Regras Contábeis', icon: <BookOpen size={16} />, path: '/financeiro/regras-contabeis' },
                 { label: 'Relatórios', icon: <BarChart3 size={16} />, path: '/relatorios' },

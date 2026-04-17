@@ -218,7 +218,7 @@ const FinalizarRegistro = () => {
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 src="/logo-enterprise.png" 
-                alt={`${BRAND.name} Logo`} 
+                alt={`Logotipo ${BRAND.name}`} 
                 className="w-full h-auto rounded-2xl shadow-2xl mb-8 border border-white/20"
               />
               <motion.div variants={itemVariants}>

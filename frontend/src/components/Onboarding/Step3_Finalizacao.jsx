@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFormContext } from 'react-hook-form';
 import { ShieldCheck, FileText, CheckCircle2 } from 'lucide-react';
+import { BRAND } from '../../config/branding';
 
 const Step3_Finalizacao = () => {
   const { register, formState: { errors } } = useFormContext();
@@ -24,7 +25,7 @@ const Step3_Finalizacao = () => {
             <h3 className="font-semibold text-sm uppercase tracking-wider">Termos de Uso e LGPD</h3>
           </div>
           <div className="text-sm text-slate-700 dark:text-slate-200 space-y-3 leading-relaxed">
-            <p>Ao prosseguir, voce concorda que o processamento dos dados fiscais e de localizacao informados e necessario para a prestacao dos servicos do ERP Modular.</p>
+            <p>Ao prosseguir, voce concorda que o processamento dos dados fiscais e de localizacao informados e necessario para a prestacao dos servicos do {BRAND.name}.</p>
             <p>Garantimos a seguranca e o isolamento logico dos seus dados (Multi-tenancy), em total conformidade com a Lei Geral de Protecao de Dados (Lei n. 13.709/2018).</p>
           </div>
         </div>

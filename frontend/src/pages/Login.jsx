@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Landmark, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { BRAND } from '../config/branding';
 
 const loginSchema = z.object({
   email: z.string().min(1, 'O e-mail é obrigatório'),
@@ -69,7 +70,7 @@ const Login = () => {
           <h1 className="text-3xl font-black tracking-tight text-slate-800 dark:text-white uppercase mb-2">
             Acesso ao <span className="text-brand-primary">Portal</span>
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">Bem-vindo de volta ao ERP Modular.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">Bem-vindo de volta ao {BRAND.shortName}.</p>
         </div>
 
         <div className="glass-card p-8 shadow-2xl border-slate-200/50 dark:border-white/5">

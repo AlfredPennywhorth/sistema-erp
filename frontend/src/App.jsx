@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { BRAND } from './config/branding';
 import MultiStepForm from './components/Onboarding/MultiStepForm';
 import TeamManagement from './components/Team/TeamManagement';
 import FinalizarRegistro from './pages/FinalizarRegistro';
@@ -363,9 +364,9 @@ function AppContent() {
         {!isHome && (
           <footer className="py-8 text-center border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-4">
-              <span>(c) 2026 Sistema ERP Modular • Foco em LGPD & SPED</span>
+              <span>(c) 2026 {BRAND.slogan} • Foco em LGPD & SPED</span>
               <span className="w-1 h-1 bg-slate-700 rounded-full" />
-              <span className="text-brand-primary">Criado por Nexus Souza</span>
+              <span className="text-brand-primary">Criado por {BRAND.name}</span>
             </p>
           </footer>
         )}

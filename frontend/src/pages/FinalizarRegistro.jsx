@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api, supabase } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { BRAND } from '../config/branding';
 
 const FinalizarRegistro = () => {
   const [searchParams] = useSearchParams();
@@ -217,12 +218,12 @@ const FinalizarRegistro = () => {
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 src="/logo-enterprise.png" 
-                alt="Souza Nexus Logo" 
+                alt={`${BRAND.name} Logo`} 
                 className="w-full h-auto rounded-2xl shadow-2xl mb-8 border border-white/20"
               />
               <motion.div variants={itemVariants}>
                 <h2 className="text-white text-2xl font-bold leading-tight mb-2">Bem-vindo à Elite</h2>
-                <p className="text-white/60 text-sm">Você está prestes a acessar a plataforma Nexus.</p>
+                <p className="text-white/60 text-sm">Você está prestes a acessar a plataforma {BRAND.name}.</p>
               </motion.div>
             </div>
 
@@ -402,7 +403,7 @@ const FinalizarRegistro = () => {
                     </button>
 
                     <p className="text-center text-[10px] text-slate-400 leading-relaxed">
-                      Gerenciado por Souza & Nexus ERP Enterprise. <br/>
+                      Gerenciado por {BRAND.name} ERP Enterprise. <br/>
                       Seus dados são protegidos por criptografia de ponta a ponta.
                     </p>
                   </form>

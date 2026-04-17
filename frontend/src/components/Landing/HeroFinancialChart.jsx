@@ -47,7 +47,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-cyan-300 shadow-[0_0_8px_#99f7ff]" />
             <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
-              Live Financial Feed
+              Fluxo Financeiro em Tempo Real
             </span>
           </div>
           <div className="flex gap-2">

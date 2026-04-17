@@ -210,7 +210,11 @@ def ativar_modulo_contabil(
     if empresa.modulo_contabil_ativo:
         raise HTTPException(
             status_code=400,
-            detail="O módulo contábil já está ativado. Para trocar de template, entre em contato com o suporte."
+            detail=(
+                "O módulo contábil já está ativado com outro template. "
+                "Para migrar para um template diferente é necessário inativar as contas existentes "
+                "e reativar o módulo — operação que requer suporte especializado para preservar o histórico."
+            )
         )
 
     # Buscar os itens do template ordenados por código (garante que pais vêm antes de filhos)

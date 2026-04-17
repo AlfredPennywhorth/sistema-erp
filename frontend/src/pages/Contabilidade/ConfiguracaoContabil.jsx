@@ -211,7 +211,7 @@ export default function ConfiguracaoContabil() {
               )}
             </button>
             <p className="text-xs text-slate-500 mt-2">
-              Esta ação criará o plano de contas baseado no template selecionado. Não pode ser desfeita.
+              Esta ação criará o plano de contas baseado no template selecionado. O template ativado não pode ser trocado sem migração de dados.
             </p>
           </div>
         </div>

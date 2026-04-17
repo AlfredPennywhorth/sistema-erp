@@ -208,7 +208,7 @@ function AppContent() {
         )}
 
         {/* Main Content */}
-        <main className={`pb-12 ${isPublicPage || isHome ? 'pt-24' : 'pt-8 px-8'}`}>
+        <main className={`pb-12 ${isPublicPage ? 'pt-24' : isHome ? 'pt-0' : 'pt-8 px-8'}`}>
           <Routes>
             {/* Rota Raiz Inteligente */}
             <Route path="/" element={
@@ -360,13 +360,15 @@ function AppContent() {
         </main>
 
         {/* Footer */}
-        <footer className="py-8 text-center border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-4">
-            <span>(c) 2026 Sistema ERP Modular • Foco em LGPD & SPED</span>
-            <span className="w-1 h-1 bg-slate-700 rounded-full" />
-            <span className="text-brand-primary">Criado por Nexus Souza</span>
-          </p>
-        </footer>
+        {!isHome && (
+          <footer className="py-8 text-center border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-4">
+              <span>(c) 2026 Sistema ERP Modular • Foco em LGPD & SPED</span>
+              <span className="w-1 h-1 bg-slate-700 rounded-full" />
+              <span className="text-brand-primary">Criado por Nexus Souza</span>
+            </p>
+          </footer>
+        )}
       </div>
     </div>
   );

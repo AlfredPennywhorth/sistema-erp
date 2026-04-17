@@ -9,14 +9,15 @@ import {
   Cell,
 } from 'recharts';
 import { brl } from './formatters';
+import { TERMS } from '../../constants/terms';
 
 function HeroTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs space-y-1 shadow-xl">
       <p className="font-bold text-white">{label}</p>
-      <p className="text-cyan-300">Receita: {brl(payload[0]?.value)}</p>
-      <p className="text-purple-300">Despesas: {brl(payload[1]?.value)}</p>
+      <p className="text-cyan-300">{TERMS.financeiro.receita}: {brl(payload[0]?.value)}</p>
+      <p className="text-purple-300">{TERMS.financeiro.despesas}: {brl(payload[1]?.value)}</p>
     </div>
   );
 }
@@ -47,7 +48,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-cyan-300 shadow-[0_0_8px_#99f7ff]" />
             <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
-              Fluxo Financeiro em Tempo Real
+              {TERMS.financeiro.fluxoFinanceiro}
             </span>
           </div>
           <div className="flex gap-2">
@@ -60,11 +61,11 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
         {/* KPI rápido */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white/5 p-4 rounded-lg">
-            <p className="text-[10px] text-slate-400 uppercase mb-1 font-bold">Receita Mensal</p>
+            <p className="text-[10px] text-slate-400 uppercase mb-1 font-bold">{TERMS.financeiro.receitaMensal}</p>
             <p className="text-2xl font-bold text-cyan-300">{brl(financialSummary?.receita)}</p>
           </div>
           <div className="bg-white/5 p-4 rounded-lg">
-            <p className="text-[10px] text-slate-400 uppercase mb-1 font-bold">Despesas</p>
+            <p className="text-[10px] text-slate-400 uppercase mb-1 font-bold">{TERMS.financeiro.despesas}</p>
             <p className="text-2xl font-bold text-purple-300">{brl(financialSummary?.despesas)}</p>
           </div>
         </div>
@@ -106,7 +107,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
           className="absolute -bottom-4 -left-4 p-4 rounded-xl border border-purple-400/30 hidden lg:block"
           style={{ background: 'rgba(28, 37, 62, 0.8)', backdropFilter: 'blur(12px)' }}
         >
-          <p className="text-xs text-purple-300 font-bold">Fluxo Líquido</p>
+          <p className="text-xs text-purple-300 font-bold">{TERMS.financeiro.fluxoLiquido}</p>
           <p className="text-xl font-bold text-white">+ {brl(financialSummary?.fluxo)}</p>
         </div>
       </div>

@@ -9,6 +9,7 @@ import {
   AreaChart,
 } from 'recharts';
 import { brl } from './formatters';
+import { TERMS } from '../../constants/terms';
 
 function CashFlowTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -17,7 +18,7 @@ function CashFlowTooltip({ active, payload, label }) {
       <p className="font-bold text-white">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.color }}>
-          {p.name === 'entradas' ? 'Entradas' : p.name === 'saidas' ? 'Saídas' : 'Saldo'}: {brl(p.value)}
+          {p.name === 'entradas' ? TERMS.graficos.legendaEntradas : p.name === 'saidas' ? TERMS.graficos.legendaSaidas : TERMS.graficos.legendaSaldo}: {brl(p.value)}
         </p>
       ))}
     </div>
@@ -37,7 +38,7 @@ export function CashFlowLineChart({ cashflow }) {
   return (
     <div className="p-6 bg-slate-900/60 rounded-2xl border border-white/5 h-full">
       <h4 className="text-xs font-black mb-6 uppercase tracking-widest text-slate-400">
-        Fluxo de Caixa (12 Meses)
+        {TERMS.financeiro.fluxoCaixa} (12 Meses)
       </h4>
       <div className="h-52">
         <ResponsiveContainer width="100%" height="100%">
@@ -91,9 +92,9 @@ export function CashFlowLineChart({ cashflow }) {
       </div>
       <div className="flex gap-4 mt-3 justify-end">
         {[
-          { label: 'Entradas', color: '#99f7ff' },
-          { label: 'Saídas',   color: '#a19ff9' },
-          { label: 'Saldo',    color: '#4ade80' },
+          { label: TERMS.graficos.legendaEntradas, color: '#99f7ff' },
+          { label: TERMS.graficos.legendaSaidas,   color: '#a19ff9' },
+          { label: TERMS.graficos.legendaSaldo,    color: '#4ade80' },
         ].map((l) => (
           <div key={l.label} className="flex items-center gap-1.5">
             <div className="w-3 h-0.5 rounded-full" style={{ backgroundColor: l.color }} />

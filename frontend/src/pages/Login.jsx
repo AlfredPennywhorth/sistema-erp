@@ -7,10 +7,11 @@ import { Landmark, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, ChevronRight }
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { BRAND } from '../config/branding';
+import { TERMS } from '../constants/terms';
 
 const loginSchema = z.object({
-  email: z.string().min(1, 'O e-mail é obrigatório'),
-  password: z.string().min(1, 'A senha é obrigatória'),
+  email: z.string().min(1, TERMS.auth.erroEmailObrigatorio),
+  password: z.string().min(1, TERMS.auth.erroSenhaObrigatoria),
 });
 
 const Login = () => {
@@ -46,7 +47,7 @@ const Login = () => {
       }
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Falha ao realizar login. Verifique suas credenciais.');
+      setError(err.message || TERMS.auth.erroLoginFalha);
     }
   };
 
@@ -68,9 +69,9 @@ const Login = () => {
             <Landmark size={32} />
           </div>
           <h1 className="text-3xl font-black tracking-tight text-slate-800 dark:text-white uppercase mb-2">
-            Acesso ao <span className="text-brand-primary">Portal</span>
+            {TERMS.auth.acessoPortal}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">Bem-vindo de volta ao {BRAND.shortName}.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">{TERMS.auth.bemVindoDeVolta} {BRAND.shortName}.</p>
         </div>
 
         <div className="glass-card p-8 shadow-2xl border-slate-200/50 dark:border-white/5">
@@ -78,7 +79,7 @@ const Login = () => {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div>
-              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide px-1">E-mail</label>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide px-1">{TERMS.auth.email}</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand-primary transition-colors">
                   <Mail size={18} />
@@ -87,7 +88,7 @@ const Login = () => {
                   type="text"
                   {...register('email')}
                   className="w-full pl-11 pr-4 py-3.5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all outline-none text-slate-800 dark:text-white font-medium"
-                  placeholder="seu@email.com ou 'admin'"
+                  placeholder={TERMS.auth.placeholderEmail}
                 />
               </div>
               {errors.email && <p className="text-red-500 text-xs mt-1 font-medium">{errors.email.message}</p>}
@@ -95,8 +96,8 @@ const Login = () => {
 
             <div>
               <div className="flex justify-between items-center mb-2 px-1">
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Senha</label>
-                <button type="button" className="text-xs font-bold text-brand-primary hover:underline">Esqueceu a senha?</button>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">{TERMS.auth.senha}</label>
+                <button type="button" className="text-xs font-bold text-brand-primary hover:underline">{TERMS.auth.esqueceuSenha}</button>
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand-primary transition-colors">
@@ -106,7 +107,7 @@ const Login = () => {
                   type={showPassword ? 'text' : 'password'}
                   {...register('password')}
                   className="w-full pl-11 pr-12 py-3.5 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/5 rounded-xl focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all outline-none text-slate-800 dark:text-white font-medium"
-                  placeholder="••••••••"
+                  placeholder={TERMS.auth.placeholderSenha}
                 />
                 <button
                   type="button"
@@ -138,19 +139,19 @@ const Login = () => {
               {isSubmitting ? (
                 <Loader2 className="animate-spin" size={20} />
               ) : (
-                <>Entrar no Sistema <ChevronRight size={20} /></>
+              <>{TERMS.auth.entrarSistema} <ChevronRight size={20} /></>
               )}
             </button>
           </form>
 
           <div className="mt-8 pt-8 border-t border-slate-100 dark:border-white/5 text-center">
             <p className="text-sm text-slate-500 font-medium">
-              Não tem uma empresa registrada? <br />
+              {TERMS.auth.semEmpresaRegistrada} <br />
               <button 
                 onClick={() => navigate('/onboarding')} 
                 className="text-brand-primary font-bold hover:underline mt-1"
               >
-                Abrir Minha Empresa Agora
+                {TERMS.auth.abrirEmpresa}
               </button>
             </p>
           </div>

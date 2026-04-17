@@ -1,6 +1,7 @@
 import React from 'react';
 import { TrendingUp, Wallet, AlertCircle, BarChart3 } from 'lucide-react';
 import { brl, pct } from './formatters';
+import { TERMS } from '../../constants/terms';
 
 /**
  * KPIStatsCards
@@ -13,33 +14,33 @@ export function KPIStatsCards({ kpis }) {
 
   const cards = [
     {
-      label: 'Saldo Total em Conta',
+      label: TERMS.financeiro.saldoTotal,
       value: brl(kpis.saldo_total),
-      badge: '+12,4% vs mês anterior',
+      badge: TERMS.financeiro.variacaoPrevio,
       badgeColor: 'text-emerald-400',
       icon: <Wallet size={18} />,
       iconBg: 'bg-emerald-500/10 text-emerald-400',
     },
     {
-      label: 'Contas a Receber',
+      label: TERMS.financeiro.contasReceber,
       value: brl(kpis.contas_receber),
-      badge: 'Pendente liquidação',
+      badge: TERMS.financeiro.pendenteLiquidacao,
       badgeColor: 'text-cyan-400',
       icon: <TrendingUp size={18} />,
       iconBg: 'bg-cyan-500/10 text-cyan-400',
     },
     {
-      label: 'Contas a Pagar',
+      label: TERMS.financeiro.contasPagar,
       value: brl(kpis.contas_pagar),
-      badge: 'Próx. vencimentos',
+      badge: TERMS.financeiro.proxVencimentos,
       badgeColor: 'text-rose-400',
       icon: <BarChart3 size={18} />,
       iconBg: 'bg-rose-500/10 text-rose-400',
     },
     {
-      label: 'Inadimplência Est.',
+      label: TERMS.financeiro.inadimplenciaEst,
       value: pct(kpis.inadimplencia),
-      badge: 'Abaixo da média setorial',
+      badge: TERMS.financeiro.abaixoMediaSetorial,
       badgeColor: 'text-amber-400',
       icon: <AlertCircle size={18} />,
       iconBg: 'bg-amber-500/10 text-amber-400',

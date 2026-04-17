@@ -19,6 +19,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
+import { TERMS } from '../constants/terms';
 
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -86,30 +87,30 @@ const Dashboard = () => {
 
   const statCards = [
     { 
-      label: 'Saldo em Caixa', 
+      label: TERMS.financeiro.saldoEmCaixa, 
       value: `R$ ${Number(saldoBancario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
-      badge: 'Disponível', 
+      badge: TERMS.financeiro.disponivel, 
       color: 'indigo',
       icon: <Wallet size={20} className="text-indigo-500" />,
     },
     { 
-      label: 'A Receber (Aberto)', 
+      label: TERMS.financeiro.aReceberAberto, 
       value: `R$ ${Number(contasReceber).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
-      badge: 'Previsão',
+      badge: TERMS.financeiro.previsao,
       color: 'emerald',
       icon: <ArrowUpCircle size={20} className="text-emerald-500" />,
     },
     { 
-      label: 'A Pagar (Aberto)', 
+      label: TERMS.financeiro.aPagarAberto, 
       value: `R$ ${Number(contasPagar).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 
-      badge: 'Compromissos',
+      badge: TERMS.financeiro.compromissos,
       color: 'rose',
       icon: <ArrowDownCircle size={20} className="text-rose-500" />,
     },
     { 
-      label: 'Índice de Liquidez', 
+      label: TERMS.financeiro.indiceLiquidez, 
       value: `${liquidez}%`, 
-      badge: liquidez >= 100 ? 'Saudável' : 'Atenção',
+      badge: liquidez >= 100 ? TERMS.financeiro.liquidezSaudavel : TERMS.financeiro.liquidezAtencao,
       color: liquidez >= 100 ? 'emerald' : 'amber',
       icon: <Activity size={20} className={liquidez >= 100 ? "text-emerald-500" : "text-amber-500"} />,
     }
@@ -117,8 +118,8 @@ const Dashboard = () => {
 
   const receitasDespesasMock = fluxoData.slice(-6).map(d => ({
     mes: d.mes,
-    Receitas: d.entradas,
-    Despesas: d.saidas,
+    receitas: d.entradas,
+    despesas: d.saidas,
   }));
 
   const liquidezRadial = [{ name: 'Liquidez', value: liquidez, fill: liquidez >= 100 ? '#10b981' : '#f59e0b' }];
@@ -128,7 +129,7 @@ const Dashboard = () => {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin" />
-          <p className="text-xs text-slate-400 uppercase tracking-widest font-bold animate-pulse">Carregando dados financeiros...</p>
+          <p className="text-xs text-slate-400 uppercase tracking-widest font-bold animate-pulse">{TERMS.dashboard.carregandoDados}</p>
         </div>
       </div>
     );
@@ -144,7 +145,7 @@ const Dashboard = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-3xl font-black text-slate-800 dark:text-white tracking-tight"
           >
-            Painel de Controle
+            {TERMS.dashboard.tituloPainel}
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0 }}
@@ -152,7 +153,7 @@ const Dashboard = () => {
             transition={{ delay: 0.1 }}
             className="text-slate-500 dark:text-slate-400 font-medium"
           >
-            Olá, {activeTenant?.razao_social || 'seja bem-vindo'}. Aqui está sua visão financeira em tempo real.
+            Olá, {activeTenant?.razao_social || 'seja bem-vindo'}. {TERMS.dashboard.subtituloBoasVindas}
           </motion.p>
         </div>
         <button
@@ -160,7 +161,7 @@ const Dashboard = () => {
           className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-brand-primary hover:text-white transition-all group"
         >
           <RefreshCcw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
-          Atualizar
+          {TERMS.dashboard.atualizar}
         </button>
       </div>
 
@@ -208,11 +209,11 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <TrendingUp size={18} className="text-brand-primary" />
-              Fluxo de Caixa — 12 Meses
+              {TERMS.financeiro.fluxoCaixa12Meses}
             </h2>
             {dataFallback && (
               <span className="text-[9px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 px-2 py-1 rounded-full">
-                Dados Exemplo
+                {TERMS.dashboard.dadosExemplo}
               </span>
             )}
           </div>
@@ -234,8 +235,8 @@ const Dashboard = () => {
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-              <Area type="monotone" dataKey="entradas" name="Entradas" stroke="#6366f1" strokeWidth={2.5} fill="url(#gradEntradas)" dot={false} />
-              <Area type="monotone" dataKey="saidas" name="Saídas" stroke="#f43f5e" strokeWidth={2} fill="url(#gradSaidas)" dot={false} />
+              <Area type="monotone" dataKey="entradas" name={TERMS.graficos.legendaEntradas} stroke="#6366f1" strokeWidth={2.5} fill="url(#gradEntradas)" dot={false} />
+              <Area type="monotone" dataKey="saidas" name={TERMS.graficos.legendaSaidas} stroke="#f43f5e" strokeWidth={2} fill="url(#gradSaidas)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
@@ -249,7 +250,7 @@ const Dashboard = () => {
         >
           <h2 className="text-base font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
             <Activity size={18} className="text-amber-500" />
-            Índice de Liquidez
+            {TERMS.financeiro.indiceLiquidez}
           </h2>
           <div className="flex-1 flex flex-col items-center justify-center">
             <ResponsiveContainer width="100%" height={180}>
@@ -275,17 +276,17 @@ const Dashboard = () => {
                 <text x="50%" y="62%" textAnchor="middle" dominantBaseline="middle"
                   style={{ fontSize: '10px', fontWeight: 700, fill: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}
                 >
-                  {liquidez >= 100 ? 'Saudável' : 'Em Atenção'}
+                  {liquidez >= 100 ? TERMS.financeiro.liquidezSaudavel : TERMS.financeiro.liquidezAtencao}
                 </text>
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="mt-4 grid grid-cols-2 gap-3 w-full">
               <div className="bg-emerald-500/10 rounded-2xl p-3 text-center">
-                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-widest">A Receber</p>
+                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-widest">{TERMS.ui.aReceber}</p>
                 <p className="text-sm font-black text-slate-800 dark:text-white mt-1">R$ {contasReceber.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
               </div>
               <div className="bg-rose-500/10 rounded-2xl p-3 text-center">
-                <p className="text-[9px] text-rose-500 font-black uppercase tracking-widest">A Pagar</p>
+                <p className="text-[9px] text-rose-500 font-black uppercase tracking-widest">{TERMS.ui.aPagar}</p>
                 <p className="text-sm font-black text-slate-800 dark:text-white mt-1">R$ {contasPagar.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
               </div>
             </div>
@@ -304,7 +305,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <BarChart3 size={18} className="text-brand-primary" />
-              Receitas vs Despesas — Últimos 6 Meses
+              {TERMS.graficos.receitasVsDespesas}
             </h2>
           </div>
           <ResponsiveContainer width="100%" height={220}>
@@ -315,8 +316,8 @@ const Dashboard = () => {
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-              <Bar dataKey="Receitas" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={32} />
-              <Bar dataKey="Despesas" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="receitas" name={TERMS.graficos.legendaReceitas} fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="despesas" name={TERMS.graficos.legendaDespesas} fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>
@@ -330,11 +331,11 @@ const Dashboard = () => {
         >
           <h2 className="text-base font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
             <ShieldCheck size={18} className="text-indigo-500" />
-            Auditoria Recente
+            {TERMS.compliance.auditoriaRecente}
           </h2>
           <div className="space-y-5">
             {recentLogs.length === 0 ? (
-              <p className="text-slate-400 text-sm italic py-4 text-center">Nenhuma atividade registrada.</p>
+              <p className="text-slate-400 text-sm italic py-4 text-center">{TERMS.dashboard.nenhumaAtividade}</p>
             ) : recentLogs.map((log, i) => (
               <div key={log.id} className="flex gap-3 group">
                 <div className="w-2 h-2 mt-2 rounded-full bg-indigo-500 flex-shrink-0" />
@@ -350,7 +351,7 @@ const Dashboard = () => {
             ))}
           </div>
           <button className="w-full mt-6 py-3 bg-slate-100 dark:bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 hover:bg-indigo-500 hover:text-white transition-all">
-            Ver Log Completo
+            {TERMS.dashboard.verLogCompleto}
           </button>
         </motion.div>
       </div>

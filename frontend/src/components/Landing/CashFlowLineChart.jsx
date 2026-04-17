@@ -57,7 +57,7 @@ export function CashFlowLineChart({ cashflow }) {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
             <XAxis
               dataKey="mes"
-              tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }}
+              tick={{ fill: CHART_COLORS.neutro, fontSize: 9, fontWeight: 700 }}
               axisLine={false}
               tickLine={false}
             />

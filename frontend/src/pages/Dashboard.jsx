@@ -123,7 +123,7 @@ const Dashboard = () => {
     despesas: d.saidas,
   }));
 
-  const liquidezRadial = [{ name: 'Liquidez', value: liquidez, fill: liquidez >= 100 ? '#10b981' : '#f59e0b' }];
+  const liquidezRadial = [{ name: 'Liquidez', value: liquidez, fill: liquidez >= 100 ? CHART_COLORS.entradas : CHART_COLORS.alerta }];
 
   if (loading) {
     return (
@@ -231,8 +231,8 @@ const Dashboard = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="mes" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false}
+              <XAxis dataKey="mes" tick={{ fill: CHART_COLORS.neutro, fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: CHART_COLORS.neutro, fontSize: 10 }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
@@ -270,12 +270,12 @@ const Dashboard = () => {
                 />
                 <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle"
                   className="fill-slate-800 dark:fill-white"
-                  style={{ fontSize: '28px', fontWeight: 900, fill: liquidez >= 100 ? '#10b981' : '#f59e0b' }}
+                  style={{ fontSize: '28px', fontWeight: 900, fill: liquidez >= 100 ? CHART_COLORS.entradas : CHART_COLORS.alerta }}
                 >
                   {liquidez}%
                 </text>
                 <text x="50%" y="62%" textAnchor="middle" dominantBaseline="middle"
-                  style={{ fontSize: '10px', fontWeight: 700, fill: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                  style={{ fontSize: '10px', fontWeight: 700, fill: CHART_COLORS.neutro, textTransform: 'uppercase', letterSpacing: '0.1em' }}
                 >
                   {liquidez >= 100 ? TERMS.financeiro.liquidezSaudavel : TERMS.financeiro.liquidezAtencao}
                 </text>
@@ -312,8 +312,8 @@ const Dashboard = () => {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={receitasDespesasMock} barGap={6} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="mes" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false}
+              <XAxis dataKey="mes" tick={{ fill: CHART_COLORS.neutro, fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: CHART_COLORS.neutro, fontSize: 10 }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />

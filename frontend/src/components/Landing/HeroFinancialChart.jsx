@@ -41,13 +41,13 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
         style={{
           background: 'rgba(28, 37, 62, 0.4)',
           backdropFilter: 'blur(12px)',
-          border: '0.5px solid rgba(153, 247, 255, 0.15)',
+          border: `0.5px solid ${withOpacity(CHART_COLORS.entradas, 0.15)}`,
         }}
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-cyan-300 shadow-[0_0_8px_#99f7ff]" />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CHART_COLORS.entradas, boxShadow: `0 0 8px ${CHART_COLORS.entradas}` }} />
             <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
               {TERMS.financeiro.fluxoFinanceiro}
             </span>
@@ -77,7 +77,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
             <BarChart data={last6} barGap={2} barCategoryGap="20%">
               <XAxis
                 dataKey="mes"
-                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                tick={{ fill: CHART_COLORS.neutro, fontSize: 10, fontWeight: 700 }}
                 axisLine={false}
                 tickLine={false}
               />

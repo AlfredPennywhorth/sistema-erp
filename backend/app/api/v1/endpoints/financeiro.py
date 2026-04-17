@@ -53,6 +53,7 @@ from app.schemas.financeiro import (
     ContaBancariaRead,
 )
 from app.core.auth import get_session, get_current_tenant_id, get_current_user_id
+from app.services.contabilidade import disparar_lancamento_por_regra
 
 router = APIRouter()
 
@@ -267,6 +268,17 @@ def create_lancamento(
             status_code=400, 
             detail="Classificação (Plano de Contas) é obrigatória."
         )
+
+    # Validar conta analítica — apenas contas analíticas recebem lançamentos
+    _conta_lc = session.exec(
+        select(PlanoConta).where(PlanoConta.id == plano_contas_id, PlanoConta.empresa_id == tenant_id)
+    ).first()
+    if not _conta_lc:
+        raise HTTPException(status_code=400, detail="Conta do plano de contas não encontrada ou não pertence a esta empresa.")
+    if not _conta_lc.is_analitica:
+        raise HTTPException(status_code=400, detail=f"A conta '{_conta_lc.nome}' é sintética. Apenas contas analíticas podem receber lançamentos.")
+    if not _conta_lc.ativo:
+        raise HTTPException(status_code=400, detail=f"A conta '{_conta_lc.nome}' está inativa.")
 
     # 2. Criar objeto do Model
     novo_lancamento = LancamentoFinanceiro(
@@ -587,6 +599,28 @@ def liquidar_lancamento(
 
     session.commit()
     session.refresh(lancamento)
+
+    # Lançamento contábil automático (não bloqueia se regra não configurada)
+    try:
+        disparar_lancamento_por_regra(
+            db=session,
+            empresa_id=tenant_id,
+            tipo_evento=TipoEventoContabil.COMPRA_AVISTA if lancamento.natureza == NaturezaFinanceira.PAGAR else TipoEventoContabil.VENDA_AVISTA,
+            natureza=lancamento.natureza,
+            valor=Decimal(str(lancamento.valor_pago)),
+            data=lancamento.data_pagamento or data_pagamento,
+            lancamento_financeiro_id=lancamento.id,
+            usuario_id=user_id,
+            referencia=lancamento.documento,
+            historico_extra=lancamento.descricao,
+        )
+        session.commit()
+    except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[CONTABIL] Falha ao disparar lançamento contábil pós-liquidação para lancamento=%s — operação financeira não afetada.",
+            lancamento.id, exc_info=True
+        )
     
     return {"message": "Liquidação realizada com sucesso", "lancamento": lancamento}
 
@@ -1035,6 +1069,10 @@ def delete_plano_conta(
     db_plano = session.exec(select(PlanoConta).where(PlanoConta.id == id, PlanoConta.empresa_id == tenant_id)).one_or_none()
     if not db_plano:
         raise HTTPException(status_code=404, detail="Conta não encontrada")
+
+    # Contas obrigatórias do template não podem ser excluídas
+    if db_plano.is_required:
+        raise HTTPException(status_code=400, detail="Esta conta é obrigatória pelo plano de contas padrão e não pode ser excluída. Para desabilitá-la, use a opção de inativar.")
     
     # Validação de Hierarquia
     filhos = session.exec(select(func.count(PlanoConta.id)).where(PlanoConta.parent_id == id)).one()
@@ -1044,7 +1082,13 @@ def delete_plano_conta(
     # Proteção de Integridade Financeira
     lancamentos = session.exec(select(func.count(LancamentoFinanceiro.id)).where(LancamentoFinanceiro.plano_contas_id == id)).one()
     if lancamentos > 0:
-        raise HTTPException(status_code=400, detail="Esta conta possui lançamentos financeiros vinculados e não pode ser excluída.")
+        raise HTTPException(status_code=400, detail="Esta conta possui lançamentos financeiros vinculados e não pode ser excluída. Use a opção de inativar.")
+
+    # Proteção contra exclusão de conta com lançamentos contábeis
+    from app.models.database import JournalEntry
+    journal_count = session.exec(select(func.count(JournalEntry.id)).where(JournalEntry.conta_id == id)).one()
+    if journal_count > 0:
+        raise HTTPException(status_code=400, detail="Esta conta possui lançamentos contábeis vinculados e não pode ser excluída. Use a opção de inativar.")
     
     session.delete(db_plano)
     session.commit()

@@ -36,6 +36,7 @@ if "sqlite" not in _db_url:
         })
 
 engine = create_engine(_db_url, **engine_kwargs)
+DATABASE_URL = _db_url
 
 # --- MIXINS ---
 
@@ -202,6 +203,17 @@ class TipoResgate(str, Enum):
     PARCIAL = "PARCIAL"
     TOTAL = "TOTAL"
 
+class AtividadeEconomica(str, Enum):
+    SERVICOS = "SERVICOS"
+    COMERCIO = "COMERCIO"
+    INDUSTRIA = "INDUSTRIA"
+    AGRICULTURA = "AGRICULTURA"
+
+class StatusLoteContabil(str, Enum):
+    ABERTO = "ABERTO"
+    CONCILIADO = "CONCILIADO"
+    CANCELADO = "CANCELADO"
+
 # --- MODELS ---
 
 class User(SQLModel, table=True):
@@ -244,6 +256,11 @@ class Empresa(SQLModel, table=True):
     configuracoes: dict = Field(default_factory=dict, sa_column=Column(JSON))
     strict_compliance_sod: bool = Field(default=True) # Trava de Segregação de Funções
     excluido_em: Optional[datetime] = Field(default=None)
+    # Módulo Contábil
+    atividade_economica: Optional[AtividadeEconomica] = Field(default=None, nullable=True)
+    modulo_contabil_ativo: bool = Field(default=False)
+    plano_contas_template_id: Optional[UUID] = Field(default=None, nullable=True)
+    plano_contas_template_versao: Optional[int] = Field(default=None, nullable=True)
 
 class UsuarioEmpresa(SQLModel, table=True):
     __tablename__ = "usuario_empresas"
@@ -252,6 +269,36 @@ class UsuarioEmpresa(SQLModel, table=True):
     empresa_id: UUID = Field(foreign_key="empresas.id", index=True) 
     role: UserRole = Field(default=UserRole.OPERADOR)
     ativo: bool = Field(default=True)
+
+class ModeloPlanoConta(AuditMixin, table=True):
+    """
+    Template de Plano de Contas global (sem empresa_id).
+    Imutável após publicação. Versionado por (codigo, versao).
+    """
+    __tablename__ = "modelos_plano_contas"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    codigo: str = Field(max_length=50, index=True)
+    nome: str = Field(max_length=255)
+    atividade_economica: AtividadeEconomica = Field(index=True)
+    versao: int = Field(default=1)
+    descricao: Optional[str] = Field(default=None)
+    ativo: bool = Field(default=True)
+
+class ModeloPlanoContaItem(AuditMixin, table=True):
+    """
+    Conta individual dentro de um template. Imutável após publicação.
+    Usa parent_codigo (string) para hierarquia, resolvida na clonagem.
+    """
+    __tablename__ = "modelos_plano_contas_itens"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    modelo_id: UUID = Field(foreign_key="modelos_plano_contas.id", index=True)
+    codigo_estruturado: str = Field(max_length=50)
+    nome: str = Field(max_length=100)
+    tipo: TipoConta
+    natureza: NaturezaConta
+    is_analitica: bool = Field(default=True)
+    parent_codigo: Optional[str] = Field(default=None, max_length=50)
+    is_required: bool = Field(default=False)  # Contas críticas do template
 
 class PlanoConta(FullAuditMixin, table=True):
     __tablename__ = "plano_contas"
@@ -263,6 +310,10 @@ class PlanoConta(FullAuditMixin, table=True):
     is_analitica: bool = Field(default=True)
     ativo: bool = Field(default=True) # Nova diretriz de negócio
     parent_id: Optional[UUID] = Field(default=None, foreign_key="plano_contas.id")
+    # Rastreabilidade de template
+    template_conta_origem_id: Optional[UUID] = Field(default=None, foreign_key="modelos_plano_contas_itens.id", nullable=True)
+    origem: str = Field(default="MANUAL", max_length=20)  # TEMPLATE ou MANUAL
+    is_required: bool = Field(default=False)  # Contas obrigatórias não podem ser deletadas
 
 class Banco(AuditMixin, table=True):
     __tablename__ = "bancos"
@@ -329,6 +380,22 @@ class BandeiraCartao(FullAuditMixin, table=True):
     prazo_repasse_dias: int = Field(default=30)  # Dias para crédito na conta bancária
     is_active: bool = Field(default=True)
 
+class LoteContabil(AuditMixin, table=True):
+    """
+    Agrupador de partidas contábeis (lançamento balanceado).
+    Garante que soma_debitos == soma_creditos por lote.
+    """
+    __tablename__ = "lotes_contabeis"
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    empresa_id: UUID = Field(foreign_key="empresas.id", index=True)
+    data_lancamento: date = Field(index=True)
+    historico: str = Field(max_length=500)
+    documento_referencia: Optional[str] = Field(default=None, max_length=100)
+    modulo_origem: str = Field(default="MANUAL", max_length=50)
+    lancamento_financeiro_id: Optional[UUID] = Field(default=None, foreign_key="lancamentos_financeiros.id", nullable=True, index=True)
+    usuario_id: Optional[UUID] = Field(default=None)
+    status: StatusLoteContabil = Field(default=StatusLoteContabil.ABERTO, index=True)
+
 class JournalEntry(AuditMixin, table=True):
     __tablename__ = "journal_entries"
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
@@ -341,6 +408,7 @@ class JournalEntry(AuditMixin, table=True):
     documento_referencia: Optional[str] = Field(default=None, max_length=100)
     modulo_origem: str = Field(default="FINANCEIRO", max_length=50)
     usuario_id: Optional[UUID] = Field(default=None)
+    lote_id: Optional[UUID] = Field(default=None, foreign_key="lotes_contabeis.id", nullable=True, index=True)
 
 class RegraContabil(FullAuditMixin, table=True):
     __tablename__ = "regras_contabeis"

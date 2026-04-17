@@ -22,6 +22,7 @@ from app.models.database import (
     StatusLancamento,
     TipoConta,
     NaturezaConta,
+    TipoEventoContabil,
 )
 from app.schemas.emprestimos import (
     EmprestimoCreate,
@@ -32,6 +33,7 @@ from app.schemas.emprestimos import (
     ParcelaEmprestimoRead,
 )
 from app.core.auth import get_session, get_current_tenant_id, get_current_user_id
+from app.services.contabilidade import disparar_lancamento_por_regra
 
 router = APIRouter()
 
@@ -481,6 +483,29 @@ def pagar_parcela(
 
     session.commit()
     session.refresh(parcela)
+
+    # Lançamento contábil automático (não bloqueia se regra não configurada)
+    try:
+        disparar_lancamento_por_regra(
+            db=session,
+            empresa_id=tenant_id,
+            tipo_evento=TipoEventoContabil.PAGAMENTO_PARCELA_EMPRESTIMO,
+            natureza=NaturezaFinanceira.PAGAR,
+            valor=payload.valor_pago,
+            data=payload.data_pagamento,
+            lancamento_financeiro_id=lancamento.id,
+            usuario_id=user_id,
+            referencia=emp.numero_contrato,
+            historico_extra=f"Parcela {parcela.numero_parcela}/{emp.numero_parcelas}",
+        )
+        session.commit()
+    except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[CONTABIL] Falha ao disparar lançamento contábil para parcela=%s — não afeta o pagamento.",
+            parcela.id, exc_info=True
+        )
+
     return ParcelaEmprestimoRead(**parcela.model_dump())
 
 

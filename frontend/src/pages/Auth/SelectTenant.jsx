@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Landmark, Plus, ArrowRight, Building2, Check, LayoutGrid, List, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
+import { BRAND } from '../../config/branding';
 
 export default function SelectTenant() {
   const { user, setActiveTenant, activeTenant, userTenants } = useAuth();
@@ -123,7 +124,7 @@ export default function SelectTenant() {
             <Landmark size={20} className="text-white" />
           </div>
           <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent uppercase">
-            Nexus ERP
+            {BRAND.name} ERP
           </h1>
         </div>
 
@@ -270,7 +271,7 @@ export default function SelectTenant() {
 
       <footer className="p-8 mt-auto text-center relative z-10 border-t border-white/5">
         <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em]">
-          Ambiente de Alta Disponibilidade • ERP Nexus
+          Ambiente de Alta Disponibilidade • {BRAND.name} ERP
         </p>
       </footer>
     </div>

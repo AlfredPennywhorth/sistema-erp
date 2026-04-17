@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BRAND } from '../config/branding';
 import {
   Landmark,
   BarChart3,
@@ -109,7 +110,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-3 bg-cyan-400/10 border border-cyan-400/20 rounded-full px-5 py-2 mb-6">
               <Zap size={14} className="text-cyan-300" />
               <span className="text-xs font-black uppercase tracking-widest text-cyan-300">
-                Sistema ERP Modular — Fase 5
+                {BRAND.slogan} — Fase 5
               </span>
             </div>
 
@@ -254,7 +255,7 @@ export default function LandingPage() {
             Pronto para controlar sua empresa de verdade?
           </h2>
           <p className="text-slate-400 text-lg mb-12">
-            Junte-se a centenas de empresas que escalaram sua operação financeira com o Sistema ERP Modular.
+            Junte-se a centenas de empresas que escalaram sua operação financeira com o {BRAND.slogan}.
           </p>
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <button
@@ -280,7 +281,7 @@ export default function LandingPage() {
           <div className="w-10 h-10 bg-cyan-400/10 border border-cyan-400/20 rounded-xl flex items-center justify-center">
             <Landmark size={20} className="text-cyan-300" />
           </div>
-          <span className="text-white font-black text-lg tracking-tight">Sistema ERP Modular</span>
+          <span className="text-white font-black text-lg tracking-tight">{BRAND.name}</span>
         </div>
         <p className="text-slate-500 text-xs uppercase tracking-widest font-bold">
           Desenvolvido com FastAPI · React · Supabase · SQLModel

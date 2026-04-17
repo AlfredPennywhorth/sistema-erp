@@ -11,6 +11,9 @@
  */
 
 // ── Primitivos ─────────────────────────────────────────────────────────────
+// These three are promoted to named constants because they appear in multiple
+// semantic aliases (e.g. entradas AND receitas both resolve to POSITIVO).
+// Other semantic colors are unique and defined inline to keep the file lean.
 const POSITIVO  = '#22c55e';
 const NEGATIVO  = '#ef4444';
 const AZUL      = '#3b82f6';
@@ -57,8 +60,12 @@ export const CATEGORY_PALETTE: readonly string[] = [
 
 /**
  * Retorna a cor com canal alpha em hexadecimal (ex: withOpacity('#22c55e', 0.3) → '#22c55e4d').
+ * Espera um valor hex válido no formato '#RRGGBB' ou '#RGB'.
  */
 export function withOpacity(hex: string, opacity: number): string {
+  if (!/^#[0-9a-fA-F]{3,8}$/.test(hex)) {
+    console.warn(`withOpacity: valor hex inválido "${hex}"`);
+  }
   const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
     .toString(16)
     .padStart(2, '0');

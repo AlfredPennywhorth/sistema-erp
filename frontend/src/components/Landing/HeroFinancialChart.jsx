@@ -106,7 +106,7 @@ export function HeroFinancialChart({ revenueVsExpenses, financialSummary }) {
         {/* Fluxo líquido flutuante */}
         <div
           className="absolute -bottom-4 -left-4 p-4 rounded-xl border hidden lg:block"
-          style={{ background: 'rgba(28, 37, 62, 0.8)', backdropFilter: 'blur(12px)', borderColor: `${CHART_COLORS.saldo}4d` }}
+          style={{ background: 'rgba(28, 37, 62, 0.8)', backdropFilter: 'blur(12px)', borderColor: withOpacity(CHART_COLORS.saldo, 0.3) }}
         >
           <p className="text-xs font-bold" style={{ color: CHART_COLORS.saldo }}>{TERMS.financeiro.fluxoLiquido}</p>
           <p className="text-xl font-bold text-white">+ {brl(financialSummary?.fluxo)}</p>

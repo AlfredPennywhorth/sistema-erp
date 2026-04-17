@@ -118,8 +118,8 @@ const Dashboard = () => {
 
   const receitasDespesasMock = fluxoData.slice(-6).map(d => ({
     mes: d.mes,
-    Receitas: d.entradas,
-    Despesas: d.saidas,
+    receitas: d.entradas,
+    despesas: d.saidas,
   }));
 
   const liquidezRadial = [{ name: 'Liquidez', value: liquidez, fill: liquidez >= 100 ? '#10b981' : '#f59e0b' }];
@@ -316,8 +316,8 @@ const Dashboard = () => {
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-              <Bar dataKey="Receitas" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={32} />
-              <Bar dataKey="Despesas" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="receitas" name={TERMS.graficos.legendaReceitas} fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="despesas" name={TERMS.graficos.legendaDespesas} fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>

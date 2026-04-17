@@ -123,7 +123,6 @@ export const TERMS = {
     entrarSistema: "Entrar no Sistema",
     abrirEmpresa: "Abrir Minha Empresa Agora",
     semEmpresaRegistrada: "Não tem uma empresa registrada?",
-    entrarSistema: "Entrar no Sistema",
     erroEmailObrigatorio: "O e-mail é obrigatório",
     erroSenhaObrigatoria: "A senha é obrigatória",
     erroLoginFalha: "Falha ao realizar login. Verifique suas credenciais.",

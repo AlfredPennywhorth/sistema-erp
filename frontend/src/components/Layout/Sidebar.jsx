@@ -21,6 +21,7 @@ import {
   Calculator,
   FileSpreadsheet,
   Layers,
+  Scale,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -64,6 +65,12 @@ const Sidebar = () => {
 
   const contabilidadeItems = [
     {
+      icon: <Settings2 size={20} />,
+      label: 'Configuração',
+      path: '/contabilidade/configuracao',
+      allowedRoles: ['ADMIN', 'OWNER'],
+    },
+    {
       icon: <BookOpen size={20} />,
       label: 'Lançamentos',
       path: '/contabilidade/lancamentos',
@@ -79,6 +86,12 @@ const Sidebar = () => {
       icon: <BarChart3 size={20} />,
       label: 'DRE',
       path: '/contabilidade/dre',
+      allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
+    },
+    {
+      icon: <Scale size={20} />,
+      label: 'Balanço',
+      path: '/contabilidade/balanco',
       allowedRoles: ['ADMIN', 'CONTADOR', 'OWNER', 'MANAGER'],
     },
   ];

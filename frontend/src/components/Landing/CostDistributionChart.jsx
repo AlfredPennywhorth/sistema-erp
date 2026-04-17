@@ -2,8 +2,7 @@ import React from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { brl, pct } from './formatters';
 import { TERMS } from '../../constants/terms';
-
-const COLORS = ['#99f7ff', '#a19ff9', '#6063ee', '#f59e0b', '#94a3b8'];
+import { CATEGORY_PALETTE } from '../../constants/chartColors';
 
 function CostTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
@@ -38,7 +37,7 @@ export function CostDistributionChart({ costDistribution }) {
                 strokeWidth={0}
               >
                 {costDistribution.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  <Cell key={i} fill={CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]} />
                 ))}
               </Pie>
               <Tooltip content={<CostTooltip />} />
@@ -50,7 +49,7 @@ export function CostDistributionChart({ costDistribution }) {
             <div key={d.categoria} className="flex items-center gap-2.5">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                style={{ backgroundColor: CATEGORY_PALETTE[i % CATEGORY_PALETTE.length] }}
               />
               <span className="text-xs text-slate-400 flex-1">{d.categoria}</span>
               <span className="text-xs font-bold text-white">{pct(d.percentual)}</span>

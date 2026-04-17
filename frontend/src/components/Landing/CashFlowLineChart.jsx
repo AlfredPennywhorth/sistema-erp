@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { brl } from './formatters';
 import { TERMS } from '../../constants/terms';
+import { CHART_COLORS } from '../../constants/chartColors';
 
 function CashFlowTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -45,12 +46,12 @@ export function CashFlowLineChart({ cashflow }) {
           <AreaChart data={cashflow} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorEntradas" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#99f7ff" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#99f7ff" stopOpacity={0} />
+                <stop offset="5%" stopColor={CHART_COLORS.entradas} stopOpacity={0.2} />
+                <stop offset="95%" stopColor={CHART_COLORS.entradas} stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#4ade80" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                <stop offset="5%" stopColor={CHART_COLORS.saldo} stopOpacity={0.2} />
+                <stop offset="95%" stopColor={CHART_COLORS.saldo} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -65,7 +66,7 @@ export function CashFlowLineChart({ cashflow }) {
             <Area
               type="monotone"
               dataKey="entradas"
-              stroke="#99f7ff"
+              stroke={CHART_COLORS.entradas}
               strokeWidth={2}
               fill="url(#colorEntradas)"
               dot={false}
@@ -73,7 +74,7 @@ export function CashFlowLineChart({ cashflow }) {
             <Area
               type="monotone"
               dataKey="saidas"
-              stroke="#a19ff9"
+              stroke={CHART_COLORS.saidas}
               strokeWidth={1.5}
               fill="none"
               dot={false}
@@ -82,7 +83,7 @@ export function CashFlowLineChart({ cashflow }) {
             <Area
               type="monotone"
               dataKey="saldo"
-              stroke="#4ade80"
+              stroke={CHART_COLORS.saldo}
               strokeWidth={2}
               fill="url(#colorSaldo)"
               dot={false}
@@ -92,9 +93,9 @@ export function CashFlowLineChart({ cashflow }) {
       </div>
       <div className="flex gap-4 mt-3 justify-end">
         {[
-          { label: TERMS.graficos.legendaEntradas, color: '#99f7ff' },
-          { label: TERMS.graficos.legendaSaidas,   color: '#a19ff9' },
-          { label: TERMS.graficos.legendaSaldo,    color: '#4ade80' },
+          { label: TERMS.graficos.legendaEntradas, color: CHART_COLORS.entradas },
+          { label: TERMS.graficos.legendaSaidas,   color: CHART_COLORS.saidas   },
+          { label: TERMS.graficos.legendaSaldo,    color: CHART_COLORS.saldo    },
         ].map((l) => (
           <div key={l.label} className="flex items-center gap-1.5">
             <div className="w-3 h-0.5 rounded-full" style={{ backgroundColor: l.color }} />

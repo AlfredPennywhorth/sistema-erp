@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { TERMS } from '../constants/terms';
+import { CHART_COLORS } from '../constants/chartColors';
 
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -221,12 +222,12 @@ const Dashboard = () => {
             <AreaChart data={fluxoData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradEntradas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop offset="5%" stopColor={CHART_COLORS.entradas} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_COLORS.entradas} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradSaidas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                  <stop offset="5%" stopColor={CHART_COLORS.saidas} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_COLORS.saidas} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -235,8 +236,8 @@ const Dashboard = () => {
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-              <Area type="monotone" dataKey="entradas" name={TERMS.graficos.legendaEntradas} stroke="#6366f1" strokeWidth={2.5} fill="url(#gradEntradas)" dot={false} />
-              <Area type="monotone" dataKey="saidas" name={TERMS.graficos.legendaSaidas} stroke="#f43f5e" strokeWidth={2} fill="url(#gradSaidas)" dot={false} />
+              <Area type="monotone" dataKey="entradas" name={TERMS.graficos.legendaEntradas} stroke={CHART_COLORS.entradas} strokeWidth={2.5} fill="url(#gradEntradas)" dot={false} />
+              <Area type="monotone" dataKey="saidas" name={TERMS.graficos.legendaSaidas} stroke={CHART_COLORS.saidas} strokeWidth={2} fill="url(#gradSaidas)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
@@ -316,8 +317,8 @@ const Dashboard = () => {
                 tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-              <Bar dataKey="receitas" name={TERMS.graficos.legendaReceitas} fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={32} />
-              <Bar dataKey="despesas" name={TERMS.graficos.legendaDespesas} fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="receitas" name={TERMS.graficos.legendaReceitas} fill={CHART_COLORS.receitas} radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="despesas" name={TERMS.graficos.legendaDespesas} fill={CHART_COLORS.despesas} radius={[6, 6, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>

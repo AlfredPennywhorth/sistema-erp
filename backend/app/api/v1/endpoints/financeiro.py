@@ -1222,12 +1222,15 @@ def delete_centro_custo(
         db_cc.ativo = False
         session.add(db_cc)
         session.commit()
+        logger_cc.info("Centro de custo id=%s inativado por possuir %d lançamento(s) vinculado(s).", id, lancamentos)
         return {"message": "Centro de custo inativado pois possui lançamentos financeiros vinculados."}
 
-    # Verificar filhos ativos
-    filhos = session.exec(select(func.count(CentroCusto.id)).where(CentroCusto.parent_id == id)).one()
+    # Verificar filhos ativos — inativados não bloqueiam a exclusão do pai
+    filhos = session.exec(
+        select(func.count(CentroCusto.id)).where(CentroCusto.parent_id == id, CentroCusto.ativo == True)
+    ).one()
     if filhos > 0:
-        raise HTTPException(status_code=400, detail="Este centro de custo possui centros filhos vinculados. Remova-os primeiro ou inative este centro.")
+        raise HTTPException(status_code=400, detail="Este centro de custo possui centros filhos ativos. Remova-os primeiro ou inative este centro.")
 
     session.delete(db_cc)
     session.commit()

@@ -4,7 +4,7 @@ import {
   Search, ChevronRight, ChevronDown, 
   Folder, FileText, Loader2, Plus, 
   Pencil, Trash2, Power, X, Check,
-  AlertCircle, Layers, Filter
+  AlertCircle, Layers
 } from 'lucide-react';
 import { FinanceiroAPI } from '../../lib/financeiro';
 

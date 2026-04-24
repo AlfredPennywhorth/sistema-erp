@@ -4,7 +4,7 @@ import {
   Search, ChevronRight, ChevronDown, 
   Folder, FileText, Loader2, Plus, 
   Pencil, Trash2, Power, X, Check,
-  AlertCircle, Layers
+  AlertCircle, Layers, Filter
 } from 'lucide-react';
 import { FinanceiroAPI } from '../../lib/financeiro';
 
@@ -12,6 +12,7 @@ export default function CentrosCusto() {
   const [centros, setCentros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterAtivo, setFilterAtivo] = useState(null); // null = todos, true = ativos, false = inativos
   const [collapsedIds, setCollapsedIds] = useState(new Set());
   
   // Modal State
@@ -24,8 +25,9 @@ export default function CentrosCusto() {
   const [formData, setFormData] = useState({
     codigo: '',
     nome: '',
+    descricao: '',
     tipo: 'ANALITICO',
-    is_active: true,
+    ativo: true,
     parent_id: ''
   });
 
@@ -59,8 +61,9 @@ export default function CentrosCusto() {
       setFormData({
         codigo: cc.codigo,
         nome: cc.nome,
+        descricao: cc.descricao || '',
         tipo: cc.tipo || 'ANALITICO',
-        is_active: cc.is_active,
+        ativo: cc.ativo,
         parent_id: cc.parent_id || ''
       });
     } else {
@@ -68,8 +71,9 @@ export default function CentrosCusto() {
       setFormData({
         codigo: '',
         nome: '',
+        descricao: '',
         tipo: 'ANALITICO',
-        is_active: true,
+        ativo: true,
         parent_id: ''
       });
     }
@@ -84,6 +88,7 @@ export default function CentrosCusto() {
     try {
       const payload = {
         ...formData,
+        descricao: formData.descricao || null,
         parent_id: formData.parent_id || null
       };
 
@@ -104,8 +109,11 @@ export default function CentrosCusto() {
   const handleDelete = async (id) => {
     if (!window.confirm("Deseja realmente excluir este Centro de Custo?")) return;
     try {
-      await FinanceiroAPI.deleteCentroCusto(id);
+      const result = await FinanceiroAPI.deleteCentroCusto(id);
       await fetchCentros();
+      if (result?.message && result.message.includes('inativado')) {
+        alert(result.message);
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || "Erro ao excluir centro de custo.";
       alert(msg);
@@ -114,7 +122,7 @@ export default function CentrosCusto() {
 
   const toggleStatus = async (cc) => {
     try {
-      await FinanceiroAPI.updateCentroCusto(cc.id, { is_active: !cc.is_active });
+      await FinanceiroAPI.updateCentroCusto(cc.id, { ativo: !cc.ativo });
       await fetchCentros();
     } catch (err) {
       alert("Erro ao alterar status.");
@@ -162,15 +170,23 @@ export default function CentrosCusto() {
   };
 
   const filteredAndVisibleCentros = useMemo(() => {
+    let result = centros;
+
+    // Filtro por status ativo/inativo
+    if (filterAtivo !== null) {
+      result = result.filter(c => c.ativo === filterAtivo);
+    }
+
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
-      return centros.filter(c => 
+      return result.filter(c => 
         c.nome.toLowerCase().includes(lowerSearch) || 
-        c.codigo.toLowerCase().includes(lowerSearch)
+        c.codigo.toLowerCase().includes(lowerSearch) ||
+        (c.descricao || '').toLowerCase().includes(lowerSearch)
       );
     }
-    return centros.filter(cc => !isAnyAncestorCollapsed(cc.id));
-  }, [centros, collapsedIds, searchTerm, centrosMap]);
+    return result.filter(cc => !isAnyAncestorCollapsed(cc.id));
+  }, [centros, collapsedIds, searchTerm, centrosMap, filterAtivo]);
 
   // --- Business Logic: Sugestão de Código ---
 
@@ -236,6 +252,28 @@ export default function CentrosCusto() {
             </div>
             
             <div className="flex flex-col sm:flex-row items-center gap-3">
+              {/* Filtro Ativo/Inativo */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+                <button
+                  onClick={() => setFilterAtivo(null)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterAtivo === null ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  Todos
+                </button>
+                <button
+                  onClick={() => setFilterAtivo(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterAtivo === true ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  Ativos
+                </button>
+                <button
+                  onClick={() => setFilterAtivo(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterAtivo === false ? 'bg-white dark:bg-slate-700 text-slate-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  Inativos
+                </button>
+              </div>
+
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <input 
@@ -283,7 +321,7 @@ export default function CentrosCusto() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className={`group hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors ${!cc.is_active ? 'opacity-40 grayscale-[50%]' : ''}`}
+                        className={`group hover:bg-slate-50/80 dark:hover:bg-white/[0.03] transition-colors ${!cc.ativo ? 'opacity-40 grayscale-[50%]' : ''}`}
                       >
                         <td className="px-6 py-3">
                           <div className="flex items-center gap-3" style={{ paddingLeft }}>
@@ -304,6 +342,9 @@ export default function CentrosCusto() {
                               <span className={`text-sm ${hasChildren ? 'font-bold text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
                                 {cc.nome}
                               </span>
+                              {cc.descricao && (
+                                <span className="text-xs text-slate-400 dark:text-slate-500 italic">{cc.descricao}</span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -327,7 +368,7 @@ export default function CentrosCusto() {
                           </div>
                         </td>
                         <td className="px-6 py-3">
-                          <span className={`inline-block w-2 h-2 rounded-full ${cc.is_active ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-400'}`}></span>
+                          <span className={`inline-block w-2 h-2 rounded-full ${cc.ativo ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-400'}`}></span>
                         </td>
                         <td className="px-6 py-3 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -340,8 +381,8 @@ export default function CentrosCusto() {
                             </button>
                             <button 
                               onClick={() => toggleStatus(cc)}
-                              className={`p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all ${cc.is_active ? 'text-slate-500 hover:text-amber-500' : 'text-amber-500 hover:text-emerald-500'}`}
-                              title={cc.is_active ? "Inativar" : "Ativar"}
+                              className={`p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all ${cc.ativo ? 'text-slate-500 hover:text-amber-500' : 'text-amber-500 hover:text-emerald-500'}`}
+                              title={cc.ativo ? "Inativar" : "Ativar"}
                             >
                               <Power size={14} />
                             </button>
@@ -434,7 +475,7 @@ export default function CentrosCusto() {
                       className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-brand-primary disabled:opacity-50"
                     >
                       <option value="">Nenhum (Nível Raiz)</option>
-                      {centros.filter(c => c.tipo === 'SINTETICO' && c.id !== editingCC?.id).map(c => (
+                      {centros.filter(c => c.tipo === 'SINTETICO' && c.id !== editingCC?.id && c.ativo).map(c => (
                         <option key={c.id} value={c.id}>{c.codigo} - {c.nome}</option>
                       ))}
                     </select>
@@ -452,7 +493,7 @@ export default function CentrosCusto() {
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Descrição</label>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Nome</label>
                       <input 
                         type="text" required
                         placeholder="Ex: Marketing Digital"
@@ -463,15 +504,26 @@ export default function CentrosCusto() {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Descrição (Opcional)</label>
+                    <input 
+                      type="text"
+                      placeholder="Detalhamento ou finalidade do centro"
+                      value={formData.descricao}
+                      onChange={(e) => setFormData({...formData, descricao: e.target.value})}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                    />
+                  </div>
+
                   <div className="flex items-center gap-2 pt-2">
                     <input 
                       type="checkbox" 
-                      id="is_active"
-                      checked={formData.is_active}
-                      onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                      id="ativo"
+                      checked={formData.ativo}
+                      onChange={(e) => setFormData({...formData, ativo: e.target.checked})}
                       className="w-4 h-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
                     />
-                    <label htmlFor="is_active" className="text-sm text-slate-600 dark:text-slate-400 font-medium">Centro Ativo</label>
+                    <label htmlFor="ativo" className="text-sm text-slate-600 dark:text-slate-400 font-medium">Centro Ativo</label>
                   </div>
                 </div>
 

@@ -50,6 +50,7 @@ const Sidebar = () => {
     { icon: <ShieldCheck size={20} />, label: TERMS.sidebar.equipe, path: '/equipe' },
     { icon: <BarChart3 size={20} />, label: TERMS.sidebar.relatorios, path: '/relatorios' },
     { icon: <Settings2 size={20} />, label: TERMS.contabil.planoContas, path: '/financeiro/plano-contas' },
+    { icon: <Layers size={20} />, label: TERMS.contabil.centroCusto, path: '/financeiro/centros-custo' },
     { 
       icon: <BookOpen size={20} />, 
       label: TERMS.sidebar.regrasContabeis, 

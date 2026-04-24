@@ -18,6 +18,7 @@ import Tesouraria from './pages/Financeiro/Tesouraria';
 import PlanoContas from './pages/Financeiro/PlanoContas';
 import RegrasContabeis from './pages/Financeiro/RegrasContabeis';
 import AplicacoesFinanceiras from './pages/Financeiro/AplicacoesFinanceiras';
+import CentrosCusto from './pages/Financeiro/CentrosCusto';
 import Contador from './pages/Contador/Contador';
 import EmpresaDetalhe from './pages/Contador/EmpresaDetalhe';
 import LancamentosContabeis from './pages/Contabilidade/LancamentosContabeis';
@@ -312,6 +313,11 @@ function AppContent() {
             <Route path="/financeiro/aplicacoes" element={
               <ProtectedRoute>
                 <AplicacoesFinanceiras />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro/centros-custo" element={
+              <ProtectedRoute>
+                <CentrosCusto />
               </ProtectedRoute>
             } />
 

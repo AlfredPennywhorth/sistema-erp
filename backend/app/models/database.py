@@ -338,11 +338,13 @@ class ContaBancaria(FullAuditMixin, table=True):
     
 class CentroCusto(FullAuditMixin, table=True):
     __tablename__ = "centros_custo"
+    __table_args__ = (UniqueConstraint("empresa_id", "codigo", name="uq_centros_custo_empresa_codigo"),)
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     codigo: str = Field(max_length=50) # Ex: CC-001
     nome: str = Field(max_length=100) # Ex: Marketing
+    descricao: Optional[str] = Field(default=None, max_length=255)
     tipo: TipoCentroCusto = Field(default=TipoCentroCusto.ANALITICO)
-    is_active: bool = Field(default=True)
+    ativo: bool = Field(default=True)
     parent_id: Optional[UUID] = Field(default=None, foreign_key="centros_custo.id")
     
 class FormaPagamento(FullAuditMixin, table=True):

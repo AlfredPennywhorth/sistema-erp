@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import List, Optional
 from decimal import Decimal
 import calendar
+import logging
 
 from app.models.database import (
     Parceiro,
@@ -1096,12 +1097,34 @@ def delete_plano_conta(
 
 # --- Centros de Custo ---
 
+logger_cc = logging.getLogger(__name__)
+
+def _check_cc_cycle(session: Session, cc_id: UUID, proposed_parent_id: UUID) -> bool:
+    """Returns True if setting parent_id would create a cycle."""
+    current_id = proposed_parent_id
+    visited = set()
+    while current_id is not None:
+        if current_id == cc_id:
+            return True
+        if current_id in visited:
+            break
+        visited.add(current_id)
+        parent = session.get(CentroCusto, current_id)
+        if parent is None:
+            break
+        current_id = parent.parent_id
+    return False
+
 @router.get("/centros-custo", response_model=List[CentroCustoRead])
 def list_centros_custo(
+    ativo: Optional[bool] = None,
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session)
 ):
-    return session.exec(select(CentroCusto).where(CentroCusto.empresa_id == tenant_id)).all()
+    query = select(CentroCusto).where(CentroCusto.empresa_id == tenant_id)
+    if ativo is not None:
+        query = query.where(CentroCusto.ativo == ativo)
+    return session.exec(query).all()
 
 @router.post("/centros-custo", response_model=CentroCustoRead, status_code=status.HTTP_201_CREATED)
 def create_centro_custo(
@@ -1109,6 +1132,25 @@ def create_centro_custo(
     tenant_id: UUID = Depends(get_current_tenant_id),
     session: Session = Depends(get_session)
 ):
+    # Código único por empresa
+    existing = session.exec(
+        select(CentroCusto).where(CentroCusto.empresa_id == tenant_id, CentroCusto.codigo == cc.codigo)
+    ).one_or_none()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Já existe um centro de custo com o código '{cc.codigo}' nesta empresa.")
+
+    # Validações do centro pai
+    if cc.parent_id is not None:
+        pai = session.exec(
+            select(CentroCusto).where(CentroCusto.id == cc.parent_id)
+        ).one_or_none()
+        if not pai:
+            raise HTTPException(status_code=404, detail="Centro de custo pai não encontrado.")
+        if pai.empresa_id != tenant_id:
+            raise HTTPException(status_code=400, detail="O centro de custo pai deve pertencer à mesma empresa.")
+        if not pai.ativo:
+            raise HTTPException(status_code=400, detail="O centro de custo pai está inativo.")
+
     db_cc = CentroCusto(**cc.model_dump())
     db_cc.empresa_id = tenant_id
     session.add(db_cc)
@@ -1126,11 +1168,39 @@ def update_centro_custo(
     db_cc = session.exec(select(CentroCusto).where(CentroCusto.id == id, CentroCusto.empresa_id == tenant_id)).one_or_none()
     if not db_cc:
         raise HTTPException(status_code=404, detail="Centro de custo não encontrado")
-    
+
     update_data = cc_update.model_dump(exclude_unset=True)
+
+    # Código único por empresa (se estiver sendo alterado)
+    if "codigo" in update_data and update_data["codigo"] != db_cc.codigo:
+        existing = session.exec(
+            select(CentroCusto).where(
+                CentroCusto.empresa_id == tenant_id,
+                CentroCusto.codigo == update_data["codigo"],
+                CentroCusto.id != id
+            )
+        ).one_or_none()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Já existe um centro de custo com o código '{update_data['codigo']}' nesta empresa.")
+
+    # Validações do centro pai (se estiver sendo alterado)
+    if "parent_id" in update_data and update_data["parent_id"] is not None:
+        new_parent_id = update_data["parent_id"]
+        pai = session.exec(
+            select(CentroCusto).where(CentroCusto.id == new_parent_id)
+        ).one_or_none()
+        if not pai:
+            raise HTTPException(status_code=404, detail="Centro de custo pai não encontrado.")
+        if pai.empresa_id != tenant_id:
+            raise HTTPException(status_code=400, detail="O centro de custo pai deve pertencer à mesma empresa.")
+        if not pai.ativo:
+            raise HTTPException(status_code=400, detail="O centro de custo pai está inativo.")
+        if _check_cc_cycle(session, id, new_parent_id):
+            raise HTTPException(status_code=400, detail="A hierarquia resultaria em um ciclo. Verifique o centro pai selecionado.")
+
     for key, value in update_data.items():
         setattr(db_cc, key, value)
-    
+
     session.add(db_cc)
     session.commit()
     session.refresh(db_cc)
@@ -1145,12 +1215,20 @@ def delete_centro_custo(
     db_cc = session.exec(select(CentroCusto).where(CentroCusto.id == id, CentroCusto.empresa_id == tenant_id)).one_or_none()
     if not db_cc:
         raise HTTPException(status_code=404, detail="Centro de custo não encontrado")
-    
-    # Proteção de Integridade Financeira
+
+    # Se possuir vínculos financeiros, prefere inativar em vez de excluir
     lancamentos = session.exec(select(func.count(LancamentoFinanceiro.id)).where(LancamentoFinanceiro.centro_custo_id == id)).one()
     if lancamentos > 0:
-        raise HTTPException(status_code=400, detail="Este centro de custo possui lançamentos financeiros vinculados e não pode ser excluído.")
-    
+        db_cc.ativo = False
+        session.add(db_cc)
+        session.commit()
+        return {"message": "Centro de custo inativado pois possui lançamentos financeiros vinculados."}
+
+    # Verificar filhos ativos
+    filhos = session.exec(select(func.count(CentroCusto.id)).where(CentroCusto.parent_id == id)).one()
+    if filhos > 0:
+        raise HTTPException(status_code=400, detail="Este centro de custo possui centros filhos vinculados. Remova-os primeiro ou inative este centro.")
+
     session.delete(db_cc)
     session.commit()
     return {"message": "Centro de custo excluído com sucesso"}

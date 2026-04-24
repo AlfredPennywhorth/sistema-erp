@@ -79,7 +79,7 @@ class SeederService:
                 empresa_id=empresa_id,
                 codigo=item["codigo"],
                 nome=item["nome"],
-                is_active=True
+                ativo=True
             )
             session.add(cc)
         

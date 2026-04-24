@@ -89,8 +89,9 @@ class PlanoContaRead(PlanoContaBase):
 class CentroCustoBase(BaseModel):
     codigo: str = Field(..., max_length=50)
     nome: str = Field(..., max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
     tipo: TipoCentroCusto = TipoCentroCusto.ANALITICO
-    is_active: bool = True
+    ativo: bool = True
     parent_id: Optional[UUID] = None
 
 class CentroCustoCreate(CentroCustoBase):
@@ -99,13 +100,16 @@ class CentroCustoCreate(CentroCustoBase):
 class CentroCustoUpdate(BaseModel):
     codigo: Optional[str] = Field(None, max_length=50)
     nome: Optional[str] = Field(None, max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
     tipo: Optional[TipoCentroCusto] = None
-    is_active: Optional[bool] = None
+    ativo: Optional[bool] = None
     parent_id: Optional[UUID] = None
 
 class CentroCustoRead(CentroCustoBase):
     id: UUID
     empresa_id: UUID
+    criado_em: datetime
+    atualizado_em: datetime
     class Config:
         from_attributes = True
 

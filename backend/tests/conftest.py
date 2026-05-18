@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+import os
 from pathlib import Path
 
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, Session, create_engine
+
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test_bootstrap.db")
 
 from app.api.v1.endpoints import team, tenants
 from app.core import auth

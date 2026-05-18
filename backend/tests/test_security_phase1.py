@@ -99,14 +99,14 @@ def test_check_cnpj_nao_vaza_razao_social(client, db_engine):
         )
         session.commit()
 
-    existente = client.get("/api/v1/tenants/check-cnpj/44.555.666/0001-77")
+    existente = client.get("/api/v1/tenants/check-cnpj/44555666000177")
     assert existente.status_code == 200
     body = existente.json()
     assert body["exists"] is True
     assert body["can_register"] is False
     assert "razao_social" not in body
 
-    inexistente = client.get("/api/v1/tenants/check-cnpj/11.111.111/1111-11")
+    inexistente = client.get("/api/v1/tenants/check-cnpj/11111111111111")
     assert inexistente.status_code == 200
     body2 = inexistente.json()
     assert body2["exists"] is False

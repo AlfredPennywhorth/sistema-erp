@@ -14,7 +14,10 @@ class TenantSetupSchema(BaseModel):
     Schema para o setup inicial da empresa (Step 1 a 3).
     """
     cnpj: str = Field(..., min_length=14, max_length=18, description="CNPJ da empresa")
-    usuario_id: UUID = Field(..., description="ID do usuário administrador logado")
+    usuario_id: Optional[UUID] = Field(
+        default=None,
+        description="(Legado) ignorado no backend; a identidade é extraída do JWT autenticado."
+    )
     email: Optional[str] = Field(default=None, max_length=255, description="E-mail do administrador")
     
     # Dados Fiscais/Endereço (Caso a BrasilAPI falhe ou para campos manuais)

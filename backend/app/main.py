@@ -19,6 +19,10 @@ async def app_startup():
     logger.info("Iniciando aplicação...")
     logger.info(f"Ambiente: {settings.ENVIRONMENT}")
     logger.info(f"Frontend URL: {settings.FRONTEND_URL}")
+
+    if settings.ENVIRONMENT.lower() == "production" and settings.ENABLE_MOCK_AUTH:
+        logger.critical("Configuração insegura: ENABLE_MOCK_AUTH=true em produção.")
+        raise RuntimeError("Inicialização bloqueada: mock auth não pode ser habilitado em produção.")
     
     # Verificar configuração crítica de segurança na inicialização
     if not settings.SUPABASE_JWT_SECRET:

@@ -110,7 +110,7 @@ const Step1_Fiscal = () => {
               <div>
                 <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Esta empresa já possui cadastro!</p>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
-                  A empresa <strong>{existingCompany?.razao_social}</strong> já está registrada.
+                  Este CNPJ já está registrado no sistema.
                 </p>
                 <a 
                   href="/login" 

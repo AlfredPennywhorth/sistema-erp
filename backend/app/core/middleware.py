@@ -16,7 +16,6 @@ ALGORITHM = "HS256"
 # Manter a lista mínima e explícita — nenhuma rota fictícia ou administrativa aqui.
 # ATENÇÃO: não incluir "/" ou "" aqui pois "startswith('/')" é verdadeiro para todos os paths.
 PUBLIC_PATHS = [
-    "/api/v1/tenants/setup",
     "/api/v1/tenants/check-cnpj",
     "/api/v1/team/invite-details",
     "/api/v1/team/finalize-registration",
@@ -66,6 +65,10 @@ async def get_empresa_id_middleware(request: Request, call_next):
 
     if auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1]
+
+        # Defesa em profundidade: mock auth nunca pode ser aceito em produção.
+        if token == "mock-token" and settings.ENVIRONMENT.lower() == "production":
+            return _unauthorized("Mock auth é proibido em produção.")
 
         # --- Modo Mock (desenvolvimento local explícito) ---
         # Ativo somente quando ENABLE_MOCK_AUTH=true no ambiente.

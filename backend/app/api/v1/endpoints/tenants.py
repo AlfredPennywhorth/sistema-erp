@@ -32,15 +32,20 @@ def check_cnpj(
     if empresa:
         return {
             "exists": True,
-            "razao_social": empresa.razao_social,
-            "mensagem": "Esta empresa já possui cadastro no sistema."
+            "can_register": False,
+            "message": "CNPJ já cadastrado."
         }
     
-    return {"exists": False}
+    return {
+        "exists": False,
+        "can_register": True,
+        "message": "CNPJ disponível para cadastro."
+    }
 
 @router.post("/setup", status_code=status.HTTP_201_CREATED)
 def setup_tenant(
     setup_data: TenantSetupSchema,
+    request: Request,
     session: Session = Depends(get_session)
 ):
     # 1. Consultar BrasilAPI (Simulado ou Real) para enriquecer dados
@@ -58,13 +63,27 @@ def setup_tenant(
         # Nota: session.begin() pode ser redundante se o generator get_session já estiver em bloco,
         # mas aqui reforçamos a lógica atômica solicitada.
         
-        # 2. Verificar se a empresa já existe
+        # 2. Identidade confiável do usuário autenticado (definida pelo middleware JWT)
+        request_user_id = getattr(request.state, "user_id", None)
+        if not request_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Autenticação obrigatória para configurar empresa."
+            )
+        try:
+            user_id = UUID(str(request_user_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Identidade do usuário inválida."
+            )
+
+        # 3. Verificar se a empresa já existe
         stmt_empresa = select(Empresa).where(Empresa.cnpj == setup_data.cnpj)
         empresa = session.exec(stmt_empresa).first()
         
         if empresa:
             # Se a empresa já existe, verificar se o usuário já tem vínculo
-            user_id = setup_data.usuario_id
             stmt_check = select(UsuarioEmpresa).where(
                 UsuarioEmpresa.usuario_id == user_id,
                 UsuarioEmpresa.empresa_id == empresa.id
@@ -81,7 +100,7 @@ def setup_tenant(
                     detail="Este CNPJ já está cadastrado por outro administrador."
                 )
 
-        # 3. Criar a Empresa
+        # 4. Criar a Empresa
         empresa = Empresa(
             cnpj=setup_data.cnpj,
             razao_social=cnpj_info.get("razao_social") or setup_data.razao_social,
@@ -99,8 +118,7 @@ def setup_tenant(
         session.add(empresa)
         session.flush() # Gerar ID da empresa
 
-        # 4. Garantir que o Usuário existe no BD (Sincronizado com Supabase)
-        user_id = setup_data.usuario_id
+        # 5. Garantir que o Usuário existe no BD (Sincronizado com Supabase)
         db_user = session.get(User, user_id)
         if not db_user:
             db_user = User(
@@ -111,7 +129,7 @@ def setup_tenant(
             session.add(db_user)
             session.flush()
 
-        # 5. Criar o Vínculo N:N como ADMIN (A Trifeta)
+        # 6. Criar o Vínculo N:N como ADMIN (A Trifeta)
         vinculo = UsuarioEmpresa(
             usuario_id=user_id,
             empresa_id=empresa.id,
@@ -120,7 +138,7 @@ def setup_tenant(
         )
         session.add(vinculo)
 
-        # 6. Log de Auditoria
+        # 7. Log de Auditoria
         log = LogAuditoria(
             empresa_id=empresa.id,
             usuario_id=user_id,
@@ -131,7 +149,7 @@ def setup_tenant(
         )
         session.add(log)
         
-        # 7. Disparar injeção do Modelo de Plano de Contas Referencial CFC
+        # 8. Disparar injeção do Modelo de Plano de Contas Referencial CFC
         cnae = empresa.cnae_principal
         if cnae.startswith("45") or cnae.startswith("46") or cnae.startswith("47"):
             segmento = "comercio"
@@ -158,6 +176,9 @@ def setup_tenant(
         logger.info("[SETUP] Empresa %s criada com sucesso", empresa.id)
         return {"status": "ok", "message": "created"}
 
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         import traceback

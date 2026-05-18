@@ -56,7 +56,8 @@ admin_only = Depends(RoleChecker([UserRole.ADMIN]))
 @router.get("/members", response_model=Dict[str, Any])
 def list_team_members(
     tenant_id: UUID = Depends(get_current_tenant_id),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    _auth=admin_only,
 ):
     start_time = time.time()
     logger.debug("[TEAM] list_team_members tenant=%s", tenant_id)
@@ -131,7 +132,8 @@ def invite_member(
     invite_data: dict, # email, role
     background_tasks: BackgroundTasks,
     tenant_id: UUID = Depends(get_current_tenant_id),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    _auth=admin_only,
 ):
     """
     Gera um token de convite e agenda o envio do e-mail em background.
@@ -203,7 +205,8 @@ def invite_member(
 def resend_invite(
     invite_id: UUID,
     tenant_id: UUID = Depends(get_current_tenant_id),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    _auth=admin_only,
 ):
     """
     Reenvia o e-mail de convite e retorna o link atualizado.
@@ -235,7 +238,8 @@ def update_member_role(
     member_id: str,
     role_data: dict,
     tenant_id: UUID = Depends(get_current_tenant_id),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    _auth=admin_only,
 ):
     """
     Altera a função (role) de um membro ativo ou de um convite pendente.
@@ -276,7 +280,8 @@ def update_member_role(
 def remove_member(
     member_id: str,
     tenant_id: UUID = Depends(get_current_tenant_id),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    _auth=admin_only,
 ):
     """
     Remove um membro da empresa ou cancela um convite pendente.
@@ -483,7 +488,8 @@ async def finalize_registration(
 @router.get("/audit", response_model=List[LogAuditoria])
 def list_audit_logs(
     tenant_id: UUID = Depends(get_current_tenant_id),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
+    _auth=admin_only,
 ):
     """
     Retorna os logs de auditoria da empresa.
